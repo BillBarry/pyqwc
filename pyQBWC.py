@@ -1,11 +1,10 @@
 import json
 import uuid
 from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode
-
 from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
 
-
+# guidance provided by the GBWC manual, ricardosasilva's django-to-quickbooks-connector and the spyne Hello World example
 
 with open('config.json') as json_config_file:
     config = json.load(json_config_file)
@@ -21,13 +20,13 @@ class QBWCService(ServiceBase):
         @return the completed array
         """
         returnArray = []
-        #returnArray[0] = uuid.uuid1()
+        returnArray.append(str(uuid.uuid1()))
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['UserName'] and strPassword == config['Password']:
             returnArray.append(config['qbwFilename'])
         else:
             returnArray.append('nvu')
-        returnArray.append('60')    
+        print 'authenticate'
         print strUserName
         print returnArray
         return returnArray
@@ -105,6 +104,14 @@ class QBWCService(ServiceBase):
         """
         print 'sendRequestXML'
         print strHCPResponse
+        xmlr = "<?xml version=\"1.0\"?>" + \
+              "<?qbxml version=\"8.0\"?>" + \
+              "<QBXML>" + \
+              "<QBXMLMsgsRq onError=\"stopOnError\">" + \
+              "<InvoiceQueryRq requestID=\"4\"> </InvoiceQueryRq>" +\
+              "</QBXMLMsgsRq>" + \
+              "</QBXML>"
+        
         xml = "<?xml version=\"1.0\" ?>" + \
               "<?qbxml version=\"2.0\" ?>" + \
                  "<QBXML>" + \
@@ -112,7 +119,7 @@ class QBWCService(ServiceBase):
                  "<ItemQueryRq></ItemQueryRq>" + \
                  "</QBXMLMsgsRq>" + \
                  "</QBXML>"
-        return xml
+        return xmlr
     
     
 
