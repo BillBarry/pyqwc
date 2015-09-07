@@ -1,5 +1,6 @@
 import json
 import uuid
+from xmlbuilder import XMLBuilder
 from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode
 from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
@@ -104,6 +105,17 @@ class QBWCService(ServiceBase):
         """
         print 'sendRequestXML'
         print strHCPResponse
+        xmlr = "<?xml version=\"1.0\" encoding=\"utf-8\"?>" + \
+               "<?qbxml version=\"8.0\"?>" + \
+               "<QBXML>" + \
+               "<QBXMLMsgsRq onError=\"stopOnError\">" + \
+               "<InvoiceQueryRq requestID=\"4\">" + \
+               "<MaxReturned>10</MaxReturned>" +\
+               "</InvoiceQueryRq>" +\
+               "</QBXMLMsgsRq>" + \
+               "</QBXML>"
+        return xmlr
+'''
         xmlr = "<?xml version=\"1.0\"?>" + \
               "<?qbxml version=\"8.0\"?>" + \
               "<QBXML>" + \
@@ -119,13 +131,14 @@ class QBWCService(ServiceBase):
                  "<ItemQueryRq></ItemQueryRq>" + \
                  "</QBXMLMsgsRq>" + \
                  "</QBXML>"
-        return xmlr
+'''
+
     
     
 
 application = Application([QBWCService], 'http://developer.intuit.com/',
                           in_protocol = Soap11(validator='lxml'),
-                         out_protocol = Soap11())
+                         out_protocol = Soap11(validator='lxml'))
 
 wsgi_application = WsgiApplication(application)
 
