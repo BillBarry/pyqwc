@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<QBWCXML>
+    <AppName>PythonQBWCService1</AppName>
+    <AppID></AppID>
+    <AppURL>http://localhost:8000/</AppURL>
+    <AppDescription>Python access to Quickbooks</AppDescription>
+    <AppSupport>http://localhost:8000</AppSupport>
+    <UserName>qbwcuser</UserName>
+    <OwnerID>{6801a7d2-3fb4-4643-8ef0-5e702b99521e}</OwnerID>
+    <FileID>}495b6884-e33f-4dba-9ecc-a3bbad96a971}</FileID>
+    <QBType>QBFS</QBType>
+    <Scheduler>
+        <RunEveryNMinutes>2</RunEveryNMinutes>
+    </Scheduler>
+</QBWCXML>
