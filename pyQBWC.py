@@ -1,11 +1,9 @@
 import json
 import uuid
-from xmlbuilder import XMLBuilder
 from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode
 from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
 
-# guidance provided by the GBWC manual, ricardosasilva's django-to-quickbooks-connector and the spyne Hello World example
 
 with open('config.json') as json_config_file:
     config = json.load(json_config_file)
@@ -115,24 +113,6 @@ class QBWCService(ServiceBase):
                "</QBXMLMsgsRq>" + \
                "</QBXML>"
         return xmlr
-'''
-        xmlr = "<?xml version=\"1.0\"?>" + \
-              "<?qbxml version=\"8.0\"?>" + \
-              "<QBXML>" + \
-              "<QBXMLMsgsRq onError=\"stopOnError\">" + \
-              "<InvoiceQueryRq requestID=\"4\"> </InvoiceQueryRq>" +\
-              "</QBXMLMsgsRq>" + \
-              "</QBXML>"
-        
-        xml = "<?xml version=\"1.0\" ?>" + \
-              "<?qbxml version=\"2.0\" ?>" + \
-                 "<QBXML>" + \
-                 "<QBXMLMsgsRq onError=\"stopOnError\">" + \
-                 "<ItemQueryRq></ItemQueryRq>" + \
-                 "</QBXMLMsgsRq>" + \
-                 "</QBXML>"
-'''
-
     
     
 
