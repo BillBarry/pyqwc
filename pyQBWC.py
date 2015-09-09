@@ -70,8 +70,8 @@ class QBWCService(ServiceBase):
             returnArray.append("") # don't return a sessionid if username password does not authenticate
             returnArray.append('nvu')
         print 'authenticate'
-        print strUserName
-        print returnArray
+        #print strUserName
+        #print returnArray
         return returnArray
 
     @srpc(Unicode,  _returns=Unicode)
@@ -81,7 +81,7 @@ class QBWCService(ServiceBase):
         @return what to do in case of Web connector updates itself
         """
         print 'clientVersion()'
-        print strVersion
+        #print strVersion
         return ""
 
     @srpc(Unicode,  _returns=Unicode)
@@ -103,9 +103,9 @@ class QBWCService(ServiceBase):
         @return string done indicating web service is finished.
         """
         print 'connectionError'
-        print ticket
-        print hresult
-        print message
+        #print ticket
+        #print hresult
+        #print message
         return "done"
 
     @srpc(Unicode,  _returns=Unicode)
@@ -132,7 +132,7 @@ class QBWCService(ServiceBase):
         """
         reqXML = session_manager.get_request(ticket)
         print 'sendRequestXML'
-        print strHCPResponse
+        #print strHCPResponse
         print reqXML
         return reqXML
 
@@ -146,10 +146,10 @@ class QBWCService(ServiceBase):
         @return string done indicating web service is finished.
         """
         print 'receiveResponseXML'
-        print ticket
-        print response
-        print hresult
-        print message
+        #print ticket
+        #print response
+        #print hresult
+        #print message
         session_manager.return_response(ticket,response)
         return 100
 
@@ -173,26 +173,27 @@ def retrieve_invoices():
     return 
 
 def receive_all_invoices(responseXML):
+    print responseXML
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
-    requestID = root.xpath('//InvoiceQueryRq/@requestID')[0]
-    iteratorRemainingCount = root.xpath('//InvoiceQueryRq/@iteratorRemainingCount')[0]
-    iteratorID = root.xpath('//InvoiceQueryRq/@iteratorID')[0]
+    requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
+    iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
+    iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
     print iteratorRemainingCount
     if iteratorRemainingCount:
         request_all_invoices(requestID,iteratorID)
     
 def request_all_invoices(requestID=0,iteratorID=""):
-    number_of_documents_to_retrieve_in_each_iteration = 20
-    invoiceAttibutes = {}
+    number_of_documents_to_retrieve_in_each_iteration = 2
+    invoiceAttributes = {}
     if not requestID:
-        invoiceAttibutes['iterator'] = "Start"
+        invoiceAttributes['iterator'] = "Start"
     else:
-        invoiceAttibutes['iterator'] = "Continue"
+        invoiceAttributes['iterator'] = "Continue"
     requestID +=1        
-    invoiceAttibutes['requestID'] = requestID
+    invoiceAttributes['requestID'] = str(requestID)
     if iteratorID:
-        invoiceAttibutes['iteratorID'] = requestID
+        invoiceAttributes['iteratorID'] = iteratorID
 
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
@@ -204,7 +205,6 @@ def request_all_invoices(requestID=0,iteratorID=""):
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     session_manager.send_request(request,receive_all_invoices)
     return 
-
 
 
         
@@ -220,13 +220,13 @@ if __name__ == '__main__':
 
     from wsgiref.simple_server import make_server
 
-    logging.basicConfig(level=logging.DEBUG)
-    logging.getLogger('spyne.protocol.xml').setLevel(logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
+    logging.getLogger('spyne.protocol.xml').setLevel(logging.INFO)
 
     logging.info("Listening to http://127.0.0.1:8000")
     logging.info("wsdl is at http://localhost:8000/?wsdl")
 
     server = make_server('127.0.0.1', 8000, wsgi_application)
-    retrieve_invoices()
+    request_all_invoices()
     server.serve_forever()
     
