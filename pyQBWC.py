@@ -15,27 +15,30 @@ class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
         self.sessionQueue = sessionQueue
 
-    def send_request(reqXML,callback):
+    def send_request(self,reqXML,callback):
         #when called create a session ticket and stuff it in the store
         ticket =  str(uuid.uuid1())
         self.sessionQueue.append({"ticket":ticket,"reqXML":reqXML,"callback":callback})
 
-    def get_sessionID():
-        return sessionQueue[0]['ticket']
+    def get_sessionID(self):
+        if self.sessionQueue:
+            return self.sessionQueue[0]['ticket']
+        else:
+            return ""
 
-    def get_Request(ticket):
-        if ticket == sessionQueue[0]['ticket']:
-            return sessionQueue[0]['reqXML']
+    def get_request(self,ticket):
+        if ticket == self.sessionQueue[0]['ticket']:
+            return self.sessionQueue[0]['reqXML']
         else:
             print "tickets do not match. There is trouble somewhere"
             return ""
         
-    def return_response(ticket, response):
+    def return_response(self,ticket, response):
         #perform the callback to return the data to the requestor
         #remove the session from the queue
-        if ticket == sessionQueue[0]['ticket']:
-            callback(response)
-            self.sessionQueue.pop[0]
+        if ticket == self.sessionQueue[0]['ticket']:
+            self.sessionQueue[0]['callback'](response)
+            self.sessionQueue.pop(0)
         else:
             print "tickets do not match. There is trouble somewhere"
             return ""
@@ -55,7 +58,6 @@ class QBWCService(ServiceBase):
         @return the completed array
         """
         returnArray = []
-        returnArray.append("")
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['UserName'] and strPassword == config['Password']:
             sessid = session_manager.get_sessionID()
@@ -160,8 +162,8 @@ def print_invoices(responseXML):
 
 def retrieve_invoices():
     root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=2.0"))
-    msg = etree.SubElement(root,'QBXMLMsgsrq', {'onError':'stopOnError'})
+    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
+    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
     irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':'4'})
     mrt = etree.SubElement(irq,'MaxReturned')
     mrt.text="10"
@@ -190,5 +192,6 @@ if __name__ == '__main__':
     logging.info("wsdl is at http://localhost:8000/?wsdl")
 
     server = make_server('127.0.0.1', 8000, wsgi_application)
+    retrieve_invoices()
     server.serve_forever()
     
