@@ -3,12 +3,48 @@ import uuid
 from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode
 from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
-
+from lxml import etree
 
 with open('config.json') as json_config_file:
     config = json.load(json_config_file)
     print config
+
+
+
+class qbwcSessionManager():
+    def __init__(self, sessionQueue = []):
+        self.sessionQueue = sessionQueue
+
+    def send_request(reqXML,callback):
+        #when called create a session ticket and stuff it in the store
+        ticket =  str(uuid.uuid1())
+        self.sessionQueue.append({"ticket":ticket,"reqXML":reqXML,"callback":callback})
+
+    def get_sessionID():
+        return sessionQueue[0]['ticket']
+
+    def get_Request(ticket):
+        if ticket == sessionQueue[0]['ticket']:
+            return sessionQueue[0]['reqXML']
+        else:
+            print "tickets do not match. There is trouble somewhere"
+            return ""
+        
+    def return_response(ticket, response):
+        #perform the callback to return the data to the requestor
+        #remove the session from the queue
+        if ticket == sessionQueue[0]['ticket']:
+            callback(response)
+            self.sessionQueue.pop[0]
+        else:
+            print "tickets do not match. There is trouble somewhere"
+            return ""
+
+        
     
+session_manager = qbwcSessionManager()
+
+        
 class QBWCService(ServiceBase):
     @srpc(Unicode, Unicode, _returns=Array(Unicode))
     def authenticate( strUserName, strPassword):
@@ -19,11 +55,17 @@ class QBWCService(ServiceBase):
         @return the completed array
         """
         returnArray = []
-        returnArray.append(str(uuid.uuid1()))
+        returnArray.append("")
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['UserName'] and strPassword == config['Password']:
-            returnArray.append(config['qbwFilename'])
+            sessid = session_manager.get_sessionID()
+            returnArray.append(sessid)
+            if sessid:
+                returnArray.append(config['qbwFilename']) # returning the filename indicates there is a request in the queue
+            else:
+                returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
+            returnArray.append("") # don't return a sessionid if username password does not authenticate
             returnArray.append('nvu')
         print 'authenticate'
         print strUserName
@@ -74,6 +116,24 @@ class QBWCService(ServiceBase):
         print ticket
         return "Error message here!"
 
+
+    @srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
+    def sendRequestXML( ticket, strHCPResponse, strCompanyFileName, qbXMLCountry, qbXMLMajorVers, qbXMLMinorVers ):
+        """ send request via web connector to Quickbooks
+        @param ticket session token sent from this service to web connector
+        @param strHCPResponse qbXML response from QuickBooks
+        @param strCompanyFileName The Quickbooks file to get the data from
+        @param qbXMLCountry the country version of QuickBooks
+        @param qbXMLMajorVers Major version number of the request processor qbXML 
+        @param qbXMLMinorVers Minor version number of the request processor qbXML 
+        @return string containing the request if there is one or a NoOp
+        """
+        reqXML = session_manager.get_request(ticket)
+        print 'sendRequestXML'
+        print strHCPResponse
+        print reqXML
+        return reqXML
+
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
     def receiveResponseXML( ticket, response, hresult, message ):
         """ contains data requested from Quickbooks
@@ -88,37 +148,33 @@ class QBWCService(ServiceBase):
         print response
         print hresult
         print message
+        session_manager.return_response(ticket,response)
         return 100
 
-    @srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
-    def sendRequestXML( ticket, strHCPResponse, strCompanyFileName, qbXMLCountry, qbXMLMajorVers, qbXMLMinorVers ):
-        """ send request via web connector to Quickbooks
-        @param ticket session token sent from this service to web connector
-        @param strHCPResponse qbXML response from QuickBooks
-        @param strCompanyFileName The Quickbooks file to get the data from
-        @param qbXMLCountry the country version of QuickBooks
-        @param qbXMLMajorVers Major version number of the request processor qbXML 
-        @param qbXMLMinorVers Minor version number of the request processor qbXML 
-        @return string containing the request if there is one or a NoOp
-        """
-        print 'sendRequestXML'
-        print strHCPResponse
-        xmlr = "<?xml version=\"1.0\" encoding=\"utf-8\"?>" + \
-               "<?qbxml version=\"8.0\"?>" + \
-               "<QBXML>" + \
-               "<QBXMLMsgsRq onError=\"stopOnError\">" + \
-               "<InvoiceQueryRq requestID=\"4\">" + \
-               "<MaxReturned>10</MaxReturned>" +\
-               "</InvoiceQueryRq>" +\
-               "</QBXMLMsgsRq>" + \
-               "</QBXML>"
-        return xmlr
-    
-    
+        
+
+def print_invoices(responseXML):
+    print "printing invoices"
+    print responseXML
+    return
+
+def retrieve_invoices():
+    root = etree.Element("QBXML")
+    root.addprevious(etree.ProcessingInstruction("qbxml", "version=2.0"))
+    msg = etree.SubElement(root,'QBXMLMsgsrq', {'onError':'stopOnError'})
+    irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':'4'})
+    mrt = etree.SubElement(irq,'MaxReturned')
+    mrt.text="10"
+    tree = etree.ElementTree(root)
+    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    session_manager.send_request(request,print_invoices)
+    return 
+
+
 
 application = Application([QBWCService], 'http://developer.intuit.com/',
                           in_protocol = Soap11(validator='lxml'),
-                         out_protocol = Soap11(validator='lxml'))
+                         out_protocol = Soap11())
 
 wsgi_application = WsgiApplication(application)
 
