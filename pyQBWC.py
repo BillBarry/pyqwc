@@ -13,7 +13,7 @@ with open('config.json') as json_config_file:
 
 class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
-        self.sessionQueue = sessionQueue
+        self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
     def send_request(self,reqXML,callback):
         #when called create a session ticket and stuff it in the store
@@ -172,21 +172,37 @@ def retrieve_invoices():
     session_manager.send_request(request,print_invoices)
     return 
 
-def retrieve_all_invoices(requestID=0):
+def receive_all_invoices(responseXML):
+    root = etree.fromstring(responseXML)
+    # do something with the response, store it in a database, return it somewhere etc
+    requestID = root.xpath('//InvoiceQueryRq/@requestID')[0]
+    iteratorRemainingCount = root.xpath('//InvoiceQueryRq/@iteratorRemainingCount')[0]
+    iteratorID = root.xpath('//InvoiceQueryRq/@iteratorID')[0]
+    print iteratorRemainingCount
+    if iteratorRemainingCount:
+        request_all_invoices(requestID,iteratorID)
+    
+def request_all_invoices(requestID=0,iteratorID=""):
+    number_of_documents_to_retrieve_in_each_iteration = 20
+    invoiceAttibutes = {}
     if not requestID:
-        iterator="Start"
+        invoiceAttibutes['iterator'] = "Start"
     else:
-        iterator="Continue"
-    requestID +=1
+        invoiceAttibutes['iterator'] = "Continue"
+    requestID +=1        
+    invoiceAttibutes['requestID'] = requestID
+    if iteratorID:
+        invoiceAttibutes['iteratorID'] = requestID
+
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':str(requestID),'iterator':iterator})
+    irq = etree.SubElement(msg,'InvoiceQueryRq',invoiceAttributes)
     mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text="10"
+    mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.send_request(request,print_invoices)
+    session_manager.send_request(request,receive_all_invoices)
     return 
 
 
