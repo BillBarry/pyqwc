@@ -172,7 +172,26 @@ def retrieve_invoices():
     session_manager.send_request(request,print_invoices)
     return 
 
+def retrieve_all_invoices(requestID=0):
+    if not requestID:
+        iterator="Start"
+    else:
+        iterator="Continue"
+    requestID +=1
+    root = etree.Element("QBXML")
+    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
+    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
+    irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':str(requestID),'iterator':iterator})
+    mrt = etree.SubElement(irq,'MaxReturned')
+    mrt.text="10"
+    tree = etree.ElementTree(root)
+    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    session_manager.send_request(request,print_invoices)
+    return 
 
+
+
+        
 
 application = Application([QBWCService], 'http://developer.intuit.com/',
                           in_protocol = Soap11(validator='lxml'),
