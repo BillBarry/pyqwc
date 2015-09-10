@@ -15,9 +15,10 @@ class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
         self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
-    def send_request(self,reqXML,callback,updatePauseSeconds=None,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=15):
+    def send_request(self,reqXML,callback,ticket="",updatePauseSeconds=None,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=15):
         #when called create a session ticket and stuff it in the store
-        ticket =  str(uuid.uuid1())
+        if not ticket:
+            ticket =  str(uuid.uuid1())
         self.sessionQueue.append({"ticket":ticket,"reqXML":reqXML,"callback":callback,"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
 
     def get_session(self):
@@ -38,7 +39,7 @@ class qbwcSessionManager():
         #perform the callback to return the data to the requestor
         #remove the session from the queue
         if ticket == self.sessionQueue[0]['ticket']:
-            self.sessionQueue[0]['callback'](response)
+            self.sessionQueue[0]['callback'](ticket, response)
             self.sessionQueue.pop(0)
         else:
             print "tickets do not match. There is trouble somewhere"
@@ -179,7 +180,7 @@ def retrieve_invoices():
     session_manager.send_request(request,print_invoices)
     return 
 
-def receive_all_invoices(responseXML):
+def receive_all_invoices(ticket,responseXML):
     print responseXML
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
@@ -188,9 +189,9 @@ def receive_all_invoices(responseXML):
     iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
     print iteratorRemainingCount
     if iteratorRemainingCount:
-        request_all_invoices(requestID,iteratorID)
+        request_all_invoices(requestID,iteratorID,ticket=ticket)
     
-def request_all_invoices(requestID=0,iteratorID=""):
+def request_all_invoices(requestID=0,iteratorID="",ticket=""):
     number_of_documents_to_retrieve_in_each_iteration = 2
     invoiceAttributes = {}
     if not requestID:
@@ -210,7 +211,7 @@ def request_all_invoices(requestID=0,iteratorID=""):
     mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.send_request(request,receive_all_invoices,updatePauseSeconds=0,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=20)
+    session_manager.send_request(request,receive_all_invoices,ticket=ticket,updatePauseSeconds=0,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=20)
     return 
 
         
@@ -233,7 +234,7 @@ if __name__ == '__main__':
     logging.info("wsdl is at http://localhost:8000/?wsdl")
 
     server = make_server('127.0.0.1', 8000, wsgi_application)
-    retrieve_invoices()
+
     request_all_invoices()
     server.serve_forever()
     
