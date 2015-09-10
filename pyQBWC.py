@@ -15,17 +15,18 @@ class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
         self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
-    def send_request(self,reqXML,callback):
+    def send_request(self,reqXML,callback,updatePauseSeconds=None,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=15):
         #when called create a session ticket and stuff it in the store
         ticket =  str(uuid.uuid1())
-        self.sessionQueue.append({"ticket":ticket,"reqXML":reqXML,"callback":callback})
+        self.sessionQueue.append({"ticket":ticket,"reqXML":reqXML,"callback":callback,"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
 
-    def get_sessionID(self):
+    def get_session(self):
         if self.sessionQueue:
-            return self.sessionQueue[0]['ticket']
+            return self.sessionQueue[0]
         else:
             return ""
-
+    
+        
     def get_request(self,ticket):
         if ticket == self.sessionQueue[0]['ticket']:
             return self.sessionQueue[0]['reqXML']
@@ -60,15 +61,21 @@ class QBWCService(ServiceBase):
         returnArray = []
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['UserName'] and strPassword == config['Password']:
-            sessid = session_manager.get_sessionID()
-            returnArray.append(sessid)
-            if sessid:
+            session = session_manager.get_session()
+            ticket = session['ticket']
+            returnArray.append(ticket)
+            if ticket:
                 returnArray.append(config['qbwFilename']) # returning the filename indicates there is a request in the queue
             else:
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
             returnArray.append("") # don't return a sessionid if username password does not authenticate
             returnArray.append('nvu')
+        #returnArray.append(str(session['updatePauseSeconds']))
+        returnArray.append("")
+        returnArray.append("")
+   #     returnArray.append(str(session['minimumUpdateSeconds']))
+        returnArray.append(str(session['MinimumRunEveryNSeconds']))        
         print 'authenticate'
         #print strUserName
         #print returnArray
@@ -151,7 +158,7 @@ class QBWCService(ServiceBase):
         #print hresult
         #print message
         session_manager.return_response(ticket,response)
-        return 100
+        return 10
 
         
 
@@ -203,9 +210,8 @@ def request_all_invoices(requestID=0,iteratorID=""):
     mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.send_request(request,receive_all_invoices)
+    session_manager.send_request(request,receive_all_invoices,updatePauseSeconds=0,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=20)
     return 
-
 
         
 
@@ -227,6 +233,7 @@ if __name__ == '__main__':
     logging.info("wsdl is at http://localhost:8000/?wsdl")
 
     server = make_server('127.0.0.1', 8000, wsgi_application)
+    retrieve_invoices()
     request_all_invoices()
     server.serve_forever()
     
