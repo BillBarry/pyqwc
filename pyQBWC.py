@@ -213,7 +213,7 @@ def request_all_invoices(requestID=0,iteratorID="",ticket=""):
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     session_manager.send_request(request,receive_all_invoices,ticket=ticket,updatePauseSeconds=0,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=20)
     return 
-
+ 
         
 
 application = Application([QBWCService], 'http://developer.intuit.com/',
