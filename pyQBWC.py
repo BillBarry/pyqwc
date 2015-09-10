@@ -181,7 +181,8 @@ def retrieve_invoices():
     return 
 
 def receive_all_invoices(ticket,responseXML):
-    print responseXML
+    with open("responseout", "w") as file:
+        file.write(responseXML)
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
     requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
@@ -211,7 +212,7 @@ def request_all_invoices(requestID=0,iteratorID="",ticket=""):
     mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.send_request(request,receive_all_invoices,ticket=ticket,updatePauseSeconds=0,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=20)
+    session_manager.send_request(request,receive_all_invoices,ticket=ticket,updatePauseSeconds=0,minimumUpdateSeconds=20,MinimumRunEveryNSeconds=30)
     return 
  
         
