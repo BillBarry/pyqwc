@@ -1,6 +1,8 @@
-This is a python application used to access Quickbooks. Right now in its primitive form it can connect with the web connector and retrieve some invoices from Quickbooks. At its core is a soap server used to connect to the Quickbooks web connector. The soap server is written using the spyne RPClib.
+This is a python application used to access Quickbooks.
+It currently consists of two servers. One server is a soap server facing the Quickbooks web connector. This is the one that is used to get information from Quickbooks. The second server faces the web and delivers the processed Qickbooks data. Both use the flask combined with spyne via the Flask-spyne python module. This allows the Quickbooks server to speak soap to the qwc. On the web facing side the intention is to have a regular html server for web requests and a soap server for speaking to Excel spreadsheets.
 
 # guidance provided by
 # The QBWC manual https://developer-static.intuit.com/qbSDK-current/doc/PDF/QBWC_proguide.pdf
 # ricardosasilva's django-to-quickbooks-connector https://github.com/ricardosasilva/django-to-quickbooks-connector/blob/master/mydjangoproject/qbwc/views.py
 # The spyne Hello World example http://spyne.io/docs/2.10/manual/02_helloworld.html
+# Flask-spyne module examples https://github.com/rayrapetyan/flask-spyne

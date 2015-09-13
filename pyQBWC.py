@@ -1,14 +1,18 @@
 import json
 import uuid
-from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode
+from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode, Iterable, ComplexModel
 from spyne.protocol.soap import Soap11
-from spyne.server.wsgi import WsgiApplication
+#from spyne.server.wsgi import WsgiApplication
 from lxml import etree
+from flask import Flask
+from flask.ext.spyne import Spyne
+
+qwcapp = Flask(__name__)
+spyne = Spyne(qwcapp)
 
 with open('config.json') as json_config_file:
     config = json.load(json_config_file)
     print config
-
 
 
 class qbwcSessionManager():
@@ -46,12 +50,13 @@ class qbwcSessionManager():
             return ""
 
         
-    
-session_manager = qbwcSessionManager()
-
-        
 class QBWCService(ServiceBase):
-    @srpc(Unicode, Unicode, _returns=Array(Unicode))
+    __target_namespace__ =  'http://developer.intuit.com/'
+    __service_url_path__ = '/soap/someservice'
+    __in_protocol__ = Soap11(validator='lxml')
+    __out_protocol__ = Soap11()
+    
+    @spyne.srpc(Unicode, Unicode, _returns=Array(Unicode))
     def authenticate( strUserName, strPassword):
 
         """Authenticate the web connector to access this service.
@@ -82,7 +87,7 @@ class QBWCService(ServiceBase):
         #print returnArray
         return returnArray
 
-    @srpc(Unicode,  _returns=Unicode)
+    @spyne.srpc(Unicode,  _returns=Unicode)
     def clientVersion( strVersion ):
         """ sends Web connector version to this service
         @param strVersion version of GB web connector
@@ -92,7 +97,7 @@ class QBWCService(ServiceBase):
         #print strVersion
         return ""
 
-    @srpc(Unicode,  _returns=Unicode)
+    @spyne.srpc(Unicode,  _returns=Unicode)
     def closeConnection( ticket ):
         """ used by web connector to indicate it is finished with update session
         @param ticket session token sent from this service to web connector
@@ -102,7 +107,7 @@ class QBWCService(ServiceBase):
         print ticket
         return "OK"
 
-    @srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
+    @spyne.srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
     def connectionError( ticket, hresult, message ):
         """ used by web connector to report errors connecting to Quickbooks
         @param ticket session token sent from this service to web connector
@@ -116,7 +121,7 @@ class QBWCService(ServiceBase):
         #print message
         return "done"
 
-    @srpc(Unicode,  _returns=Unicode)
+    @spyne.srpc(Unicode,  _returns=Unicode)
     def getLastError( ticket ):
         """ sends Web connector version to this service
         @param ticket session token sent from this service to web connector
@@ -127,7 +132,7 @@ class QBWCService(ServiceBase):
         return "Error message here!"
 
 
-    @srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
+    @spyne.srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
     def sendRequestXML( ticket, strHCPResponse, strCompanyFileName, qbXMLCountry, qbXMLMajorVers, qbXMLMinorVers ):
         """ send request via web connector to Quickbooks
         @param ticket session token sent from this service to web connector
@@ -144,7 +149,7 @@ class QBWCService(ServiceBase):
         print reqXML
         return reqXML
 
-    @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
+    @spyne.srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
     def receiveResponseXML( ticket, response, hresult, message ):
         """ contains data requested from Quickbooks
         @param ticket session token sent from this service to web connector
@@ -161,7 +166,7 @@ class QBWCService(ServiceBase):
         session_manager.return_response(ticket,response)
         return 10
 
-        
+session_manager = qbwcSessionManager()        
 
 def print_invoices(responseXML):
     print "printing invoices"
@@ -215,15 +220,20 @@ def request_all_invoices(requestID=0,iteratorID="",ticket=""):
     session_manager.send_request(request,receive_all_invoices,ticket=ticket,updatePauseSeconds=0,minimumUpdateSeconds=20,MinimumRunEveryNSeconds=30)
     return 
  
-        
-
+'''        
 application = Application([QBWCService], 'http://developer.intuit.com/',
                           in_protocol = Soap11(validator='lxml'),
                          out_protocol = Soap11())
 
+
 wsgi_application = WsgiApplication(application)
+'''
 
 if __name__ == '__main__':
+
+    #qwcapp.run(port=8000, debug=True)
+    pass
+'''
     import logging
 
     from wsgiref.simple_server import make_server
@@ -236,6 +246,7 @@ if __name__ == '__main__':
 
     server = make_server('127.0.0.1', 8000, wsgi_application)
 
-    request_all_invoices()
+    #request_all_invoices()
     server.serve_forever()
     
+'''
