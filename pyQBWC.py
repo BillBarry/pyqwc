@@ -19,15 +19,33 @@ class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
         self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
-    def send_request(self,reqXML,callback,ticket="",updatePauseSeconds=None,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=15):
-        print "send_request received",reqXML
-        #when called create a session ticket and stuff it in the store
-        if not ticket:
-            ticket =  str(uuid.uuid1())
-        print ticket
-        self.sessionQueue.append({"ticket":ticket,"reqXML":reqXML,"callback":callback,"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
-
+    def queue_requests(self):
+        #checks the process requestQueue to see if there are any requests, if so, put them in sessionQueue
+        while not app.config['requestQueue'].empty():
+            msg = app.config['requestQueue'].get()
+            print "send_request received",msg
+            #when called create a session ticket and stuff it in the store
+            if 'ticket' not in msg:
+                ticket =  str(uuid.uuid1())
+            else:
+                ticket = msg['ticket']
+            if 'updatePauseSeconds' in msg:
+                updatePauseSeconds = msg['updatePauseSeconds']
+            else:
+                updatePauseSeconds = None    
+            if 'MinimumRunEveryNSeconds' in msg:
+                MinimumRunEveryNSeconds = msg['MinimumRunEveryNSeconds']
+            else:
+                MinimumRunEveryNSeconds = 15    
+            if 'minimumUpdateSeconds' in msg:
+                minimumUpdateSeconds = msg['minimumUpdateSeconds']
+            else:
+                minimumUpdateSeconds = 15    
+            print ticket
+            self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
+    
     def get_session(self):
+        self.queue_requests()
         if self.sessionQueue:
             return self.sessionQueue[0]
         else:
@@ -45,12 +63,10 @@ class qbwcSessionManager():
         #perform the callback to return the data to the requestor
         #remove the session from the queue
         if ticket == self.sessionQueue[0]['ticket']:
-            self.sessionQueue[0]['callback'](ticket, response)
-            #callback = self.sessionQueue[0]['callback']
+            app.config['responseQueue'].put(ticket,response)
             self.sessionQueue.pop(0)
-            #callback().send(ticket, response)
         else:
-            #app.logger.debug("tickets do not match. There is trouble somewhere")
+            app.logger.debug("tickets do not match. There is trouble somewhere")
             return ""
 
 #class QBWCService(ServiceBase):        
@@ -90,7 +106,7 @@ class QBWCService(spyne.Service):
         else:
             returnArray.append("") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
-        #app.logger.debug('authenticate',returnArray)
+        app.logger.debug('authenticate %s',returnArray)
         return returnArray
 
     @spyne.srpc(Unicode,  _returns=Unicode)
@@ -99,7 +115,7 @@ class QBWCService(spyne.Service):
         @param strVersion version of GB web connector
         @return what to do in case of Web connector updates itself
         """
-        app.logger.debug('clientVersion()',strVersion)
+        app.logger.debug('clientVersion %s',strVersion)
         return ""
 
     @spyne.srpc(Unicode,  _returns=Unicode)
@@ -108,7 +124,7 @@ class QBWCService(spyne.Service):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        app.logger.debug('closeConnection',ticket)
+        app.logger.debug('closeConnection %s',ticket)
         return "OK"
 
     @spyne.srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
@@ -119,7 +135,7 @@ class QBWCService(spyne.Service):
         @param message error message
         @return string done indicating web service is finished.
         """
-        app.logger.debug('connectionError', ticket, hresult, message)
+        app.logger.debug('connectionError %s %s %s', ticket, hresult, message)
         return "done"
 
     @spyne.srpc(Unicode,  _returns=Unicode)
@@ -128,7 +144,7 @@ class QBWCService(spyne.Service):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        app.logger.debug('lasterror',ticket)
+        app.logger.debug('lasterror %s',ticket)
         return "Error message here!"
 
 
@@ -144,7 +160,7 @@ class QBWCService(spyne.Service):
         @return string containing the request if there is one or a NoOp
         """
         reqXML = session_manager.get_request(ticket)
-        app.logger.debug('sendRequestXML',strHCPResponse,reqXML)
+        app.logger.debug('sendRequestXML %s %s',strHCPResponse,reqXML)
         return reqXML
 
     @spyne.srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -156,7 +172,7 @@ class QBWCService(spyne.Service):
         @param message error message
         @return string done indicating web service is finished.
         """
-        app.logger.debug('receiveResponseXML',ticket,response,hresult,message)
+        app.logger.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
         session_manager.return_response(ticket,response)
         return 10
 

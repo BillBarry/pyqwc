@@ -5,11 +5,10 @@ from spyne.protocol.json import JsonDocument
 from flask import Flask, render_template
 from flask.ext.spyne import Spyne
 from lxml import etree
-import pyQBWC as qwc
+#import pyQBWC as qwc
 
 app = Flask(__name__, static_url_path='')
 spyne = Spyne(app)
-
 
 def coroutine(func):
     def start(*args, **kwargs):
@@ -42,7 +41,8 @@ def retrieve_invoices():
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     print "sending request",request
-    qwc.session_manager.send_request(request, return_invoices)
+    app.config['requestQueue'].put({'reqXML':request})
+    #qwc.session_manager.send_request(request, return_invoices)
     return request
 
 
