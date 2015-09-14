@@ -11,20 +11,28 @@ app = Flask(__name__, static_url_path='')
 spyne = Spyne(app)
 
 
+def coroutine(func):
+    def start(*args, **kwargs):
+        g = func(*args, **kwargs)
+        g.next()
+        return g
+    return start
 
 @app.route("/")
 def main():
-    return render_template('templates/syncdb.html')
-
-
+    return render_template('syncdb.html')
 
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
 
+#@coroutine
+def return_invoices(respnse):
+#    (tkt,respnse) = (yield)
+    return render_template('syncdb.html',data=respnse)
+
 @app.route("/qwc/invoice")
 def retrieve_invoices():
-
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
@@ -33,9 +41,10 @@ def retrieve_invoices():
     mrt.text="10"
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    qwc.session_manager.send_request(request,retrieve_invoices)
-    (tkt,respnse) = (yield)
-    return render_template('templates/syncdb.html',date=respnse)
+    print "sending request",request
+    qwc.session_manager.send_request(request, return_invoices)
+    return request
+
 
 @app.route("/qwc/syncToDatabase")    
 def request_all_invoices(requestID=0,iteratorID="",ticket=""):

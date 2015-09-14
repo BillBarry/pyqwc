@@ -5,8 +5,8 @@ from spyne.protocol.soap import Soap11
 from flask import Flask
 from flask.ext.spyne import Spyne
 
-qwcapp = Flask(__name__)
-spyne = Spyne(qwcapp)
+app = Flask(__name__)
+spyne = Spyne(app)
 
 
 
@@ -20,9 +20,11 @@ class qbwcSessionManager():
         self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
     def send_request(self,reqXML,callback,ticket="",updatePauseSeconds=None,minimumUpdateSeconds=15,MinimumRunEveryNSeconds=15):
+        print "send_request received",reqXML
         #when called create a session ticket and stuff it in the store
         if not ticket:
             ticket =  str(uuid.uuid1())
+        print ticket
         self.sessionQueue.append({"ticket":ticket,"reqXML":reqXML,"callback":callback,"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
 
     def get_session(self):
@@ -43,17 +45,18 @@ class qbwcSessionManager():
         #perform the callback to return the data to the requestor
         #remove the session from the queue
         if ticket == self.sessionQueue[0]['ticket']:
-            #self.sessionQueue[0]['callback'](ticket, response)
-            self.sessionQueue[0]['callback']().send(ticket, response)
+            self.sessionQueue[0]['callback'](ticket, response)
+            #callback = self.sessionQueue[0]['callback']
             self.sessionQueue.pop(0)
+            #callback().send(ticket, response)
         else:
-            app.logger.debug("tickets do not match. There is trouble somewhere")
+            #app.logger.debug("tickets do not match. There is trouble somewhere")
             return ""
 
-        
-class QBWCService(ServiceBase):
+#class QBWCService(ServiceBase):        
+class QBWCService(spyne.Service):
     __target_namespace__ =  'http://developer.intuit.com/'
-    __service_url_path__ = '/soap/someservice'
+    __service_url_path__ = '/qwc'
     __in_protocol__ = Soap11(validator='lxml')
     __out_protocol__ = Soap11()
     
@@ -65,25 +68,29 @@ class QBWCService(ServiceBase):
         @param strPassword password to use for authentication
         @return the completed array
         """
+        print "trying to authenticate"
         returnArray = []
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['UserName'] and strPassword == config['Password']:
+            print "authenticated"
             session = session_manager.get_session()
-            ticket = session['ticket']
-            returnArray.append(ticket)
-            if ticket:
+            if 'ticket' in session:
+                print "have ticket"
+                returnArray.append(session['ticket'])
                 returnArray.append(config['qbwFilename']) # returning the filename indicates there is a request in the queue
+                #returnArray.append(str(session['updatePauseSeconds']))
+                returnArray.append("")
+                returnArray.append("")
+                #     returnArray.append(str(session['minimumUpdateSeconds']))
+                returnArray.append(str(session['MinimumRunEveryNSeconds']))        
             else:
+                print "don't have ticket"
+                returnArray.append("") # don't return a ticket if there are no requests
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
-            returnArray.append("") # don't return a sessionid if username password does not authenticate
+            returnArray.append("") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
-        #returnArray.append(str(session['updatePauseSeconds']))
-        returnArray.append("")
-        returnArray.append("")
-   #     returnArray.append(str(session['minimumUpdateSeconds']))
-        returnArray.append(str(session['MinimumRunEveryNSeconds']))        
-        app.logger.debug('authenticate',returnArray)
+        #app.logger.debug('authenticate',returnArray)
         return returnArray
 
     @spyne.srpc(Unicode,  _returns=Unicode)
@@ -156,5 +163,5 @@ class QBWCService(ServiceBase):
 session_manager = qbwcSessionManager()
 
 if __name__ == '__main__':
-    qwcapp.run(port=8000, debug=True)
+    app.run(port=8000, debug=True)
 
