@@ -8,12 +8,8 @@ from flask.ext.spyne import Spyne
 app = Flask(__name__)
 spyne = Spyne(app)
 
-
-
 with open('config.json') as json_config_file:
     config = json.load(json_config_file)
-    print config
-
 
 class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
@@ -41,7 +37,6 @@ class qbwcSessionManager():
                 minimumUpdateSeconds = msg['minimumUpdateSeconds']
             else:
                 minimumUpdateSeconds = 15    
-            print ticket
             self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
     
     def get_session(self):
@@ -63,7 +58,7 @@ class qbwcSessionManager():
         #perform the callback to return the data to the requestor
         #remove the session from the queue
         if ticket == self.sessionQueue[0]['ticket']:
-            app.config['responseQueue'].put(ticket,response)
+            app.config['responseQueue'].put((ticket,response))
             self.sessionQueue.pop(0)
         else:
             app.logger.debug("tickets do not match. There is trouble somewhere")
@@ -101,10 +96,10 @@ class QBWCService(spyne.Service):
                 returnArray.append(str(session['MinimumRunEveryNSeconds']))        
             else:
                 print "don't have ticket"
-                returnArray.append("") # don't return a ticket if there are no requests
+                returnArray.append("no ticket") # don't return a ticket if there are no requests
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
-            returnArray.append("") # don't return a ticket if username password does not authenticate
+            returnArray.append("no ticket") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
         app.logger.debug('authenticate %s',returnArray)
         return returnArray

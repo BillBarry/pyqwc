@@ -5,7 +5,7 @@ from spyne.protocol.json import JsonDocument
 from flask import Flask, render_template
 from flask.ext.spyne import Spyne
 from lxml import etree
-#import pyQBWC as qwc
+import time
 
 app = Flask(__name__, static_url_path='')
 spyne = Spyne(app)
@@ -25,10 +25,6 @@ def main():
 def send_static(path):
     return send_from_directory('static', path)
 
-#@coroutine
-def return_invoices(respnse):
-#    (tkt,respnse) = (yield)
-    return render_template('syncdb.html',data=respnse)
 
 @app.route("/qwc/invoice")
 def retrieve_invoices():
@@ -42,8 +38,13 @@ def retrieve_invoices():
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     print "sending request",request
     app.config['requestQueue'].put({'reqXML':request})
-    #qwc.session_manager.send_request(request, return_invoices)
-    return request
+    print "watching for response"
+    while True:    
+        if not app.config['responseQueue'].empty():
+            msg = app.config['responseQueue'].get()
+            return render_template('syncdb.html',data=msg)
+        else:
+            time.sleep(1)
 
 
 @app.route("/qwc/syncToDatabase")    
