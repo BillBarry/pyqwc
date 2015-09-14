@@ -2,13 +2,13 @@ import json
 import uuid
 from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode, Iterable, ComplexModel
 from spyne.protocol.soap import Soap11
-#from spyne.server.wsgi import WsgiApplication
-from lxml import etree
 from flask import Flask
 from flask.ext.spyne import Spyne
 
 qwcapp = Flask(__name__)
 spyne = Spyne(qwcapp)
+
+
 
 with open('config.json') as json_config_file:
     config = json.load(json_config_file)
@@ -43,10 +43,11 @@ class qbwcSessionManager():
         #perform the callback to return the data to the requestor
         #remove the session from the queue
         if ticket == self.sessionQueue[0]['ticket']:
-            self.sessionQueue[0]['callback'](ticket, response)
+            #self.sessionQueue[0]['callback'](ticket, response)
+            self.sessionQueue[0]['callback']().send(ticket, response)
             self.sessionQueue.pop(0)
         else:
-            print "tickets do not match. There is trouble somewhere"
+            app.logger.debug("tickets do not match. There is trouble somewhere")
             return ""
 
         
@@ -82,9 +83,7 @@ class QBWCService(ServiceBase):
         returnArray.append("")
    #     returnArray.append(str(session['minimumUpdateSeconds']))
         returnArray.append(str(session['MinimumRunEveryNSeconds']))        
-        print 'authenticate'
-        #print strUserName
-        #print returnArray
+        app.logger.debug('authenticate',returnArray)
         return returnArray
 
     @spyne.srpc(Unicode,  _returns=Unicode)
@@ -93,8 +92,7 @@ class QBWCService(ServiceBase):
         @param strVersion version of GB web connector
         @return what to do in case of Web connector updates itself
         """
-        print 'clientVersion()'
-        #print strVersion
+        app.logger.debug('clientVersion()',strVersion)
         return ""
 
     @spyne.srpc(Unicode,  _returns=Unicode)
@@ -103,8 +101,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        print 'closeConnection()'
-        print ticket
+        app.logger.debug('closeConnection',ticket)
         return "OK"
 
     @spyne.srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
@@ -115,10 +112,7 @@ class QBWCService(ServiceBase):
         @param message error message
         @return string done indicating web service is finished.
         """
-        print 'connectionError'
-        #print ticket
-        #print hresult
-        #print message
+        app.logger.debug('connectionError', ticket, hresult, message)
         return "done"
 
     @spyne.srpc(Unicode,  _returns=Unicode)
@@ -127,8 +121,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        print 'lasterror'
-        print ticket
+        app.logger.debug('lasterror',ticket)
         return "Error message here!"
 
 
@@ -144,9 +137,7 @@ class QBWCService(ServiceBase):
         @return string containing the request if there is one or a NoOp
         """
         reqXML = session_manager.get_request(ticket)
-        print 'sendRequestXML'
-        #print strHCPResponse
-        print reqXML
+        app.logger.debug('sendRequestXML',strHCPResponse,reqXML)
         return reqXML
 
     @spyne.srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -158,95 +149,12 @@ class QBWCService(ServiceBase):
         @param message error message
         @return string done indicating web service is finished.
         """
-        print 'receiveResponseXML'
-        #print ticket
-        #print response
-        #print hresult
-        #print message
+        app.logger.debug('receiveResponseXML',ticket,response,hresult,message)
         session_manager.return_response(ticket,response)
         return 10
 
-session_manager = qbwcSessionManager()        
-
-def print_invoices(responseXML):
-    print "printing invoices"
-    print responseXML
-    return
-
-def retrieve_invoices():
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':'4'})
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text="10"
-    tree = etree.ElementTree(root)
-    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.send_request(request,print_invoices)
-    return 
-
-def receive_all_invoices(ticket,responseXML):
-    with open("responseout", "w") as file:
-        file.write(responseXML)
-    root = etree.fromstring(responseXML)
-    # do something with the response, store it in a database, return it somewhere etc
-    requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
-    iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
-    iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
-    print iteratorRemainingCount
-    if iteratorRemainingCount:
-        request_all_invoices(requestID,iteratorID,ticket=ticket)
-    
-def request_all_invoices(requestID=0,iteratorID="",ticket=""):
-    number_of_documents_to_retrieve_in_each_iteration = 2
-    invoiceAttributes = {}
-    if not requestID:
-        invoiceAttributes['iterator'] = "Start"
-    else:
-        invoiceAttributes['iterator'] = "Continue"
-    requestID +=1        
-    invoiceAttributes['requestID'] = str(requestID)
-    if iteratorID:
-        invoiceAttributes['iteratorID'] = iteratorID
-
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',invoiceAttributes)
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
-    tree = etree.ElementTree(root)
-    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.send_request(request,receive_all_invoices,ticket=ticket,updatePauseSeconds=0,minimumUpdateSeconds=20,MinimumRunEveryNSeconds=30)
-    return 
- 
-'''        
-application = Application([QBWCService], 'http://developer.intuit.com/',
-                          in_protocol = Soap11(validator='lxml'),
-                         out_protocol = Soap11())
-
-
-wsgi_application = WsgiApplication(application)
-'''
+session_manager = qbwcSessionManager()
 
 if __name__ == '__main__':
+    qwcapp.run(port=8000, debug=True)
 
-    #qwcapp.run(port=8000, debug=True)
-    pass
-'''
-    import logging
-
-    from wsgiref.simple_server import make_server
-
-    logging.basicConfig(level=logging.INFO)
-    logging.getLogger('spyne.protocol.xml').setLevel(logging.INFO)
-
-    logging.info("Listening to http://127.0.0.1:8000")
-    logging.info("wsdl is at http://localhost:8000/?wsdl")
-
-    server = make_server('127.0.0.1', 8000, wsgi_application)
-
-    #request_all_invoices()
-    server.serve_forever()
-    
-'''
