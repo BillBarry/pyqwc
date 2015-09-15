@@ -19,7 +19,6 @@ def coroutine(func):
 
 @app.route("/")
 def main():
-    print "rendering template"
     return render_template('syncdb.html')
 
 @app.route('/static/<path:path>')
@@ -29,7 +28,6 @@ def send_static(path):
 
 @app.route("/qwc/invoice")
 def retrieve_invoices():
-    print "retrieve invoice"
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
@@ -38,9 +36,7 @@ def retrieve_invoices():
     mrt.text="10"
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    print "sending request",request
     app.config['requestQueue'].put({'reqXML':request})
-    print "watching for response"
     while True:    
         if not app.config['responseQueue'].empty():
             msg = app.config['responseQueue'].get()
@@ -75,21 +71,23 @@ def request_all_invoices():
                 mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
                 tree = etree.ElementTree(root)
                 request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-                app.config['requestQueue'].put({'reqXML':request,'ticket':ticket,'updatePauseSeconds':0,'minimumUpdateSeconds':20,'MinimumRunEveryNSeconds':30})
+                print "Sending request:",time.ctime()
+                app.config['requestQueue'].put({'reqXML':request,'ticket':ticket,'updatePauseSeconds':"",'minimumUpdateSeconds': "",'MinimumRunEveryNSeconds':15})
                 while True:
                     if not app.config['responseQueue'].empty():
                         (ticket,responseXML) = app.config['responseQueue'].get()
-                        print "ticket",ticket
+                        print 'response removed from queue:',time.ctime()
                         break
                     else:
-                        time.sleep(1)
+                        pass
+                        #time.sleep(1)
                 file.write(responseXML)                        
                 root = etree.fromstring(responseXML)
                 # do something with the response, store it in a database, return it somewhere etc
                 requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
                 iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
                 iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
-                print iteratorRemainingCount,
+                print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
                 if not iteratorRemainingCount:
                     break
     return render_template('syncdb.html')

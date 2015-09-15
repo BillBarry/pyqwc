@@ -4,6 +4,7 @@ from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode, Itera
 from spyne.protocol.soap import Soap11
 from flask import Flask
 from flask.ext.spyne import Spyne
+import time
 
 app = Flask(__name__)
 spyne = Spyne(app)
@@ -16,10 +17,10 @@ class qbwcSessionManager():
         self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
     def queue_requests(self):
+        print 'queuing request',time.ctime()
         #checks the process requestQueue to see if there are any requests, if so, put them in sessionQueue
-        while not app.config['requestQueue'].empty():
+        if not app.config['requestQueue'].empty():
             msg = app.config['requestQueue'].get()
-            print "send_request received",msg
             #when called create a session ticket and stuff it in the store
             if 'ticket' not in msg or not msg['ticket']:
                 ticket =  str(uuid.uuid1())
@@ -28,7 +29,7 @@ class qbwcSessionManager():
             if 'updatePauseSeconds' in msg:
                 updatePauseSeconds = msg['updatePauseSeconds']
             else:
-                updatePauseSeconds = None    
+                updatePauseSeconds = 0    
             if 'MinimumRunEveryNSeconds' in msg:
                 MinimumRunEveryNSeconds = msg['MinimumRunEveryNSeconds']
             else:
@@ -47,17 +48,22 @@ class qbwcSessionManager():
             return ""
     
         
-    def get_request(self,ticket):
-        print self.sessionQueue
+    def send_request(self,ticket):
+        print "in send_request",time.ctime()
+        self.queue_requests()
         if ticket == self.sessionQueue[0]['ticket']:
-            return self.sessionQueue[0]['reqXML']
+            ret = self.sessionQueue[0]['reqXML']
+            return ret
         else:
             print "tickets do not match. There is trouble somewhere"
             return ""
         
     def return_response(self,ticket, response):
+        #self.queue_requests()
+        
         #perform the callback to return the data to the requestor
         #remove the session from the queue
+        print 'in return response',time.ctime()
         if ticket == self.sessionQueue[0]['ticket']:
             app.config['responseQueue'].put((ticket,response))
             self.sessionQueue.pop(0)
@@ -80,24 +86,22 @@ class QBWCService(spyne.Service):
         @param strPassword password to use for authentication
         @return the completed array
         """
-        #print "trying to authenticate"
         returnArray = []
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['UserName'] and strPassword == config['Password']:
-            print "authenticated"
+            print "authenticated",time.ctime()
             session = session_manager.get_session()
             if 'ticket' in session:
-                print "have ticket"
                 returnArray.append(session['ticket'])
                 returnArray.append(config['qbwFilename']) # returning the filename indicates there is a request in the queue
                 #returnArray.append(str(session['updatePauseSeconds']))
                 returnArray.append("")
                 returnArray.append("")
-                # returnArray.append(str(session['minimumUpdateSeconds']))
+                #returnArray.append(str(session['minimumUpdateSeconds']))
                 returnArray.append(str(session['MinimumRunEveryNSeconds']))                        
             else:
                 print "don't have ticket"
-                returnArray.append("no ticket") # don't return a ticket if there are no requests
+                returnArray.append("") # don't return a ticket if there are no requests
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
             returnArray.append("no ticket") # don't return a ticket if username password does not authenticate
@@ -155,7 +159,7 @@ class QBWCService(spyne.Service):
         @param qbXMLMinorVers Minor version number of the request processor qbXML 
         @return string containing the request if there is one or a NoOp
         """
-        reqXML = session_manager.get_request(ticket)
+        reqXML = session_manager.send_request(ticket)
         app.logger.debug('sendRequestXML %s %s',strHCPResponse,reqXML)
         return reqXML
 
@@ -168,8 +172,11 @@ class QBWCService(spyne.Service):
         @param message error message
         @return string done indicating web service is finished.
         """
+        print 'receiveResponseXML a',time.ctime()
         app.logger.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
         session_manager.return_response(ticket,response)
+        print 'response queued',time.ctime()
+        #        time.sleep(2)
         return 10
 
 session_manager = qbwcSessionManager()
