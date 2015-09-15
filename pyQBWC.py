@@ -21,7 +21,7 @@ class qbwcSessionManager():
             msg = app.config['requestQueue'].get()
             print "send_request received",msg
             #when called create a session ticket and stuff it in the store
-            if 'ticket' not in msg:
+            if 'ticket' not in msg or not msg['ticket']:
                 ticket =  str(uuid.uuid1())
             else:
                 ticket = msg['ticket']
