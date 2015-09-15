@@ -2,7 +2,7 @@
 <QBWCXML>
     <AppName>PythonQBWCService1</AppName>
     <AppID></AppID>
-    <AppURL>http://localhost:8000/</AppURL>
+    <AppURL>http://localhost:8000/qwc</AppURL>
     <AppDescription>Python access to Quickbooks</AppDescription>
     <AppSupport>http://localhost:8000</AppSupport>
     <UserName>qbwcuser</UserName>

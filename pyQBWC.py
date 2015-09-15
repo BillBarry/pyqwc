@@ -48,6 +48,7 @@ class qbwcSessionManager():
     
         
     def get_request(self,ticket):
+        print self.sessionQueue
         if ticket == self.sessionQueue[0]['ticket']:
             return self.sessionQueue[0]['reqXML']
         else:
@@ -79,7 +80,7 @@ class QBWCService(spyne.Service):
         @param strPassword password to use for authentication
         @return the completed array
         """
-        print "trying to authenticate"
+        #print "trying to authenticate"
         returnArray = []
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['UserName'] and strPassword == config['Password']:
@@ -92,8 +93,8 @@ class QBWCService(spyne.Service):
                 #returnArray.append(str(session['updatePauseSeconds']))
                 returnArray.append("")
                 returnArray.append("")
-                #     returnArray.append(str(session['minimumUpdateSeconds']))
-                returnArray.append(str(session['MinimumRunEveryNSeconds']))        
+                # returnArray.append(str(session['minimumUpdateSeconds']))
+                returnArray.append(str(session['MinimumRunEveryNSeconds']))                        
             else:
                 print "don't have ticket"
                 returnArray.append("no ticket") # don't return a ticket if there are no requests

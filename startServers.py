@@ -8,12 +8,12 @@ import time
 def  QuickBooksFacing(requestQueue,responseQueue):
     pyQBWC.app.config['requestQueue'] = requestQueue
     pyQBWC.app.config['responseQueue'] = responseQueue    
-    pyQBWC.app.run(port=8000,debug=False)
+    pyQBWC.app.run(port=8000,debug=True)
     
 def WebFacing(requestQueue,responseQueue):
     queryServer.app.config['requestQueue'] = requestQueue
     queryServer.app.config['responseQueue'] = responseQueue
-    queryServer.app.run(host='127.0.0.1',port=5000,debug=False)
+    queryServer.app.run(host='127.0.0.1',port=5001,debug=True)
     # having debug=True is throwing a lot of warnings
 
 def qwc():
@@ -27,9 +27,9 @@ if __name__ == '__main__':
     jobs.append(talktoquickbooks)
     webserver = multiprocessing.Process(target=WebFacing, args=(requestQueue,responseQueue))
     jobs.append(webserver)
-    simulator = multiprocessing.Process(target=qwc)
-    jobs.append(simulator)
+    #    simulator = multiprocessing.Process(target=qwc)
+    #    jobs.append(simulator)
     talktoquickbooks.start()
     webserver.start()
-    time.sleep(1)
-    simulator.start()
+    #    time.sleep(1)
+    #    simulator.start()

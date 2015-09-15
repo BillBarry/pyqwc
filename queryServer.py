@@ -19,6 +19,7 @@ def coroutine(func):
 
 @app.route("/")
 def main():
+    print "rendering template"
     return render_template('syncdb.html')
 
 @app.route('/static/<path:path>')
@@ -28,6 +29,7 @@ def send_static(path):
 
 @app.route("/qwc/invoice")
 def retrieve_invoices():
+    print "retrieve invoice"
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
@@ -50,11 +52,11 @@ def retrieve_invoices():
 @app.route("/qwc/syncToDatabase")    
 def request_all_invoices():
     requestID=0
-    iteratorid=""
+    iteratorID=""
     ticket=""
     with open("responseout", "w") as file:
             while True:
-                number_of_documents_to_retrieve_in_each_iteration = 2
+                number_of_documents_to_retrieve_in_each_iteration = 10
                 invoiceAttributes = {}
                 if not requestID:
                     invoiceAttributes['iterator'] = "Start"
@@ -77,6 +79,7 @@ def request_all_invoices():
                 while True:
                     if not app.config['responseQueue'].empty():
                         (ticket,responseXML) = app.config['responseQueue'].get()
+                        print "ticket",ticket
                         break
                     else:
                         time.sleep(1)
