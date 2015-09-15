@@ -48,41 +48,48 @@ def retrieve_invoices():
 
 
 @app.route("/qwc/syncToDatabase")    
-def request_all_invoices(requestID=0,iteratorID="",ticket=""):
-    number_of_documents_to_retrieve_in_each_iteration = 2
-    invoiceAttributes = {}
-    if not requestID:
-        invoiceAttributes['iterator'] = "Start"
-    else:
-        invoiceAttributes['iterator'] = "Continue"
-    requestID +=1        
-    invoiceAttributes['requestID'] = str(requestID)
-    if iteratorID:
-        invoiceAttributes['iteratorID'] = iteratorID
-
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',invoiceAttributes)
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
-    tree = etree.ElementTree(root)
-    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    qwc.session_manager.send_request(request,receive_all_invoices,ticket=ticket,updatePauseSeconds=0,minimumUpdateSeconds=20,MinimumRunEveryNSeconds=30)
-    return 
-
-
-def receive_all_invoices(ticket,responseXML):
+def request_all_invoices():
+    requestID=0
+    iteratorid=""
+    ticket=""
     with open("responseout", "w") as file:
-        file.write(responseXML)
-    root = etree.fromstring(responseXML)
-    # do something with the response, store it in a database, return it somewhere etc
-    requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
-    iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
-    iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
-    print iteratorRemainingCount
-    if iteratorRemainingCount:
-        request_all_invoices(requestID,iteratorID,ticket=ticket)
+            while True:
+                number_of_documents_to_retrieve_in_each_iteration = 2
+                invoiceAttributes = {}
+                if not requestID:
+                    invoiceAttributes['iterator'] = "Start"
+                else:
+                    invoiceAttributes['iterator'] = "Continue"
+                requestID +=1        
+                invoiceAttributes['requestID'] = str(requestID)
+                if iteratorID:
+                    invoiceAttributes['iteratorID'] = iteratorID
+
+                root = etree.Element("QBXML")
+                root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
+                msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
+                irq = etree.SubElement(msg,'InvoiceQueryRq',invoiceAttributes)
+                mrt = etree.SubElement(irq,'MaxReturned')
+                mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
+                tree = etree.ElementTree(root)
+                request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+                app.config['requestQueue'].put({'reqXML':request,'ticket':ticket,'updatePauseSeconds':0,'minimumUpdateSeconds':20,'MinimumRunEveryNSeconds':30})
+                while True:
+                    if not app.config['responseQueue'].empty():
+                        (ticket,responseXML) = app.config['responseQueue'].get()
+                        break
+                    else:
+                        time.sleep(1)
+                file.write(responseXML)                        
+                root = etree.fromstring(responseXML)
+                # do something with the response, store it in a database, return it somewhere etc
+                requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
+                iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
+                iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
+                print iteratorRemainingCount,
+                if not iteratorRemainingCount:
+                    break
+    return render_template('syncdb.html')
 
 
 class SomeSoapService(spyne.Service):    
