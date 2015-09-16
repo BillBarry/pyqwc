@@ -17,9 +17,9 @@ class qbwcSessionManager():
         self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
     def queue_requests(self):
-        print 'queuing request',time.ctime()
         #checks the process requestQueue to see if there are any requests, if so, put them in sessionQueue
-        if not app.config['requestQueue'].empty():
+        while not app.config['requestQueue'].empty():
+            print 'queuing request',time.ctime()
             msg = app.config['requestQueue'].get()
             #when called create a session ticket and stuff it in the store
             if 'ticket' not in msg or not msg['ticket']:
@@ -94,10 +94,10 @@ class QBWCService(spyne.Service):
             if 'ticket' in session:
                 returnArray.append(session['ticket'])
                 returnArray.append(config['qbwFilename']) # returning the filename indicates there is a request in the queue
-                #returnArray.append(str(session['updatePauseSeconds']))
-                returnArray.append("")
-                returnArray.append("")
-                #returnArray.append(str(session['minimumUpdateSeconds']))
+                returnArray.append(str(session['updatePauseSeconds']))
+                #returnArray.append("")
+                #returnArray.append("")
+                returnArray.append(str(session['minimumUpdateSeconds']))
                 returnArray.append(str(session['MinimumRunEveryNSeconds']))                        
             else:
                 print "don't have ticket"
@@ -176,7 +176,7 @@ class QBWCService(spyne.Service):
         app.logger.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
         session_manager.return_response(ticket,response)
         print 'response queued',time.ctime()
-        #        time.sleep(2)
+        #time.sleep(15) # hack
         return 10
 
 session_manager = qbwcSessionManager()

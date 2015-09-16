@@ -6,6 +6,7 @@ from flask import Flask, render_template
 from flask.ext.spyne import Spyne
 from lxml import etree
 import time
+import db
 
 app = Flask(__name__, static_url_path='')
 spyne = Spyne(app)
@@ -50,9 +51,10 @@ def request_all_invoices():
     requestID=0
     iteratorID=""
     ticket=""
+    responseXML = ""
     with open("responseout", "w") as file:
             while True:
-                number_of_documents_to_retrieve_in_each_iteration = 10
+                number_of_documents_to_retrieve_in_each_iteration = 100
                 invoiceAttributes = {}
                 if not requestID:
                     invoiceAttributes['iterator'] = "Start"
@@ -72,18 +74,17 @@ def request_all_invoices():
                 tree = etree.ElementTree(root)
                 request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
                 print "Sending request:",time.ctime()
-                app.config['requestQueue'].put({'reqXML':request,'ticket':ticket,'updatePauseSeconds':"",'minimumUpdateSeconds': "",'MinimumRunEveryNSeconds':15})
-                while True:
-                    if not app.config['responseQueue'].empty():
-                        (ticket,responseXML) = app.config['responseQueue'].get()
-                        print 'response removed from queue:',time.ctime()
-                        break
-                    else:
-                        time.sleep(1)
-                        #pass
-
-    
-                file.write(responseXML)                        
+                app.config['requestQueue'].put({'reqXML':request,'ticket':ticket,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+                if responseXML:
+                    print "storing",time.ctime()
+                    db.store_invoice(responseXML)
+                    print "finished storing",time.ctime()                        
+                    responseXML = ""
+                    #                while True:
+                while not app.config['responseQueue'].empty():
+                    (ticket,responseXML) = app.config['responseQueue'].get()
+                    print 'response removed from queue:',time.ctime()
+                    break
                 root = etree.fromstring(responseXML)
                 # do something with the response, store it in a database, return it somewhere etc
                 requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
