@@ -5,6 +5,10 @@ import pyQBWC
 import qwcSimulator
 import time
 
+# this is the script to start everything up. It starts two servers
+# in two separate processes.
+# by uncommenting the last three lines it can also start a third client process that simulates the Quickbooks web connector for testing.
+
 def  QuickBooksFacing(requestQueue,responseQueue):
     pyQBWC.app.config['requestQueue'] = requestQueue
     pyQBWC.app.config['responseQueue'] = responseQueue    
@@ -27,9 +31,8 @@ if __name__ == '__main__':
     jobs.append(talktoquickbooks)
     webserver = multiprocessing.Process(target=WebFacing, args=(requestQueue,responseQueue))
     jobs.append(webserver)
+    talktoquickbooks.start()
+    webserver.start()    
     #    simulator = multiprocessing.Process(target=qwc)
     #    jobs.append(simulator)
-    talktoquickbooks.start()
-    webserver.start()
-    #    time.sleep(1)
     #    simulator.start()

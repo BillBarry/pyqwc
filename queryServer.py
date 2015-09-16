@@ -79,8 +79,10 @@ def request_all_invoices():
                         print 'response removed from queue:',time.ctime()
                         break
                     else:
-                        pass
-                        #time.sleep(1)
+                        time.sleep(1)
+                        #pass
+
+    
                 file.write(responseXML)                        
                 root = etree.fromstring(responseXML)
                 # do something with the response, store it in a database, return it somewhere etc
