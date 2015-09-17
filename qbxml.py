@@ -2,17 +2,55 @@ from lxml import etree
 
 def invoice_request_iterative(requestID=1,iteratorID=""):
     number_of_documents_to_retrieve_in_each_iteration = 100
-    invoiceAttributes = {}
+    attributes = {}
     if not iteratorID:
-        invoiceAttributes['iterator'] = "Start"
+        attributes['iterator'] = "Start"
     else:
-        invoiceAttributes['iterator'] = "Continue"
-        invoiceAttributes['iteratorID'] = iteratorID        
-    invoiceAttributes['requestID'] = str(requestID)
+        attributes['iterator'] = "Continue"
+        attributes['iteratorID'] = iteratorID        
+    attributes['requestID'] = str(requestID)
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',invoiceAttributes)
+    irq = etree.SubElement(msg,'InvoiceQueryRq',attributes)
+    mrt = etree.SubElement(irq,'MaxReturned')
+    mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
+    tree = etree.ElementTree(root)
+    requestxml = etree.tostring(tree, xml_declaration=True, encoding='UTF-8')
+    return requestxml
+
+def customer_request_iterative(requestID=1,iteratorID=""):
+    number_of_documents_to_retrieve_in_each_iteration = 100
+    attributes = {}
+    if not iteratorID:
+        attributes['iterator'] = "Start"
+    else:
+        attributes['iterator'] = "Continue"
+        attributes['iteratorID'] = iteratorID        
+    attributes['requestID'] = str(requestID)
+    root = etree.Element("QBXML")
+    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
+    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
+    irq = etree.SubElement(msg,'CustomerQueryRq',attributes)
+    mrt = etree.SubElement(irq,'MaxReturned')
+    mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
+    tree = etree.ElementTree(root)
+    requestxml = etree.tostring(tree, xml_declaration=True, encoding='UTF-8')
+    return requestxml
+
+def customer_request_iterative(requestID=1,iteratorID=""):
+    number_of_documents_to_retrieve_in_each_iteration = 100
+    attributes = {}
+    if not iteratorID:
+        attributes['iterator'] = "Start"
+    else:
+        attributes['iterator'] = "Continue"
+        attributes['iteratorID'] = iteratorID        
+    attributes['requestID'] = str(requestID)
+    root = etree.Element("QBXML")
+    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
+    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
+    irq = etree.SubElement(msg,'CustomerQueryRq',attributes)
     mrt = etree.SubElement(irq,'MaxReturned')
     mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
     tree = etree.ElementTree(root)
@@ -107,3 +145,4 @@ def make_fake_invoice(requestID=1,iteratorID="",iteratorRemainingCount="",iterat
 </QBXML>
 ''' % (requestID,iterator,iteratorRemainingCount,iteratorID)
     return requestxml
+

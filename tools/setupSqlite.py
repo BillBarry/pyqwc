@@ -7,7 +7,6 @@ print dbfile
 
 
 table1 = 'invoices'
-table2 = 'customers'
 table1_schema = '''
 (TxnID  TEXT PRIMARY KEY NOT NULL,
 TxnNumber TEXT,
@@ -22,5 +21,20 @@ json TEXT);
 '''
 
 sql = 'create table if not exists ' + table1 + table1_schema
+with sqlite3.connect(dbfile) as conn:
+    conn.execute(sql)
+
+
+# trouble with ListID not being unique track that down
+table2 = 'customers'
+table2_schema = '''
+(ListID  TEXT PRIMARY KEY NOT NULL,
+Name TEXT,
+FullName TEXT,
+CustomerType TEXT,
+json TEXT);
+'''
+
+sql = 'create table if not exists ' + table2 + table2_schema
 with sqlite3.connect(dbfile) as conn:
     conn.execute(sql)

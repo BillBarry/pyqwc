@@ -75,7 +75,6 @@ class qbwcSessionManager():
         if ticket == self.sessionQueue[0]['ticket']:
             callback = self.sessionQueue[0]['callback']
             self.sessionQueue.pop(0)
-            print 'callback',callback
             callback(ticket,response)
         else:
             app.logger.debug("tickets do not match. There is trouble somewhere")
@@ -83,16 +82,16 @@ class qbwcSessionManager():
 
 
 def syncQBtoDB():
-    iterate_invoices_start()
+    #iterate_invoices_start()
+    iterate_customers_start()
         
 def iterate_invoices_start():
     request = qbxml.invoice_request_iterative()
     session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_invoices_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def iterate_invoices_continue(ticket,responseXML):
-    print "storing",responseXML,time.ctime()
+    print "storing",time.ctime()
     db.insert_invoice(responseXML)
-    print "finished storing",time.ctime()                        
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
     requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
@@ -103,6 +102,25 @@ def iterate_invoices_continue(ticket,responseXML):
         requestID +=1
         request = qbxml.invoice_request_iterative(requestID=requestID,iteratorID=iteratorID)
         session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_invoices_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+
+def iterate_customers_start():
+    request = qbxml.customer_request_iterative()
+    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_customers_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+
+def iterate_customers_continue(ticket,responseXML):
+    print "storing",time.ctime()
+    db.insert_customer(responseXML)
+    print "finished storing",time.ctime()                        
+    root = etree.fromstring(responseXML)
+    # do something with the response, store it in a database, return it somewhere etc
+    requestID = int(root.xpath('//CustomerQueryRs/@requestID')[0])
+    iteratorRemainingCount = int(root.xpath('//CustomerQueryRs/@iteratorRemainingCount')[0])
+    iteratorID = root.xpath('//CustomerQueryRs/@iteratorID')[0]
+    print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
+    if iteratorRemainingCount:
+        requestID +=1
+        request = qbxml.customer_request_iterative(requestID=requestID,iteratorID=iteratorID)
+        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_customerss_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def retrieve_invoices():            
     root = etree.Element("QBXML")
@@ -162,7 +180,6 @@ class QBWCService(spyne.Service):
                 returnArray.append(str(session['minimumUpdateSeconds']))
                 returnArray.append(str(session['MinimumRunEveryNSeconds']))                        
             else:
-                print "don't have ticket"
                 returnArray.append("none") # don't return a ticket if there are no requests
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
