@@ -28,6 +28,12 @@ class qbwcSessionManager():
             #interpret the msg fire off the correct function it will return a session to be put in the sessionqueue
             if req['job'] == 'syncQBtoDB':
                 syncQBtoDB()
+            elif req['job'] == 'retrieve_invoices':
+                retrieve_invoices()
+            elif req['job'] == 'retrieve_customers':
+                retrieve_customers()
+            else:
+                return
 
     def queue_session(self,msg):
             #when called create a session ticket and stuff it in the store
@@ -57,12 +63,13 @@ class qbwcSessionManager():
             return ""
         
     def send_request(self,ticket):
-        if ticket == self.sessionQueue[0]['ticket']:
-            ret = self.sessionQueue[0]['reqXML']
-            return ret
-        else:
-            print "tickets do not match. There is trouble somewhere"
-            return ""
+        if self.sessionQueue:
+            if ticket == self.sessionQueue[0]['ticket']:
+                ret = self.sessionQueue[0]['reqXML']
+                return ret
+            else:
+                print "tickets do not match. There is trouble somewhere"
+                return ""
         
     def return_response(self,ticket, response):
         if ticket == self.sessionQueue[0]['ticket']:
@@ -76,17 +83,16 @@ class qbwcSessionManager():
 
 
 def syncQBtoDB():
-    get_invoices()
+    iterate_invoices_start()
         
-def get_invoices():
+def iterate_invoices_start():
     request = qbxml.invoice_request_iterative()
-    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_invoices,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_invoices_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
-def iterate_invoices(ticket,responseXML):
+def iterate_invoices_continue(ticket,responseXML):
     print "storing",responseXML,time.ctime()
     db.insert_invoice(responseXML)
     print "finished storing",time.ctime()                        
-
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
     requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
@@ -96,11 +102,40 @@ def iterate_invoices(ticket,responseXML):
     if iteratorRemainingCount:
         requestID +=1
         request = qbxml.invoice_request_iterative(requestID=requestID,iteratorID=iteratorID)
-        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_invoices,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_invoices_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
+def retrieve_invoices():            
+    root = etree.Element("QBXML")
+    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
+    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
+    irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':'4'})
+    mrt = etree.SubElement(irq,'MaxReturned')
+    mrt.text="10"
+    tree = etree.ElementTree(root)
+    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    session_manager.queue_session({'reqXML':request,'callback':invoice_return})
 
-        
-#class QBWCService(ServiceBase):        
+def invoice_return(ticket,responseXML):
+    with open('invoiceout','w') as invout:
+        invout.write(responseXML)
+    print "invoice saved in file"
+def retrieve_customers():            
+    root = etree.Element("QBXML")
+    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
+    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
+    irq = etree.SubElement(msg,'CustomerQueryRq',{'requestID':'4'})
+    mrt = etree.SubElement(irq,'MaxReturned')
+    mrt.text="10"
+    tree = etree.ElementTree(root)
+    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    session_manager.queue_session({'reqXML':request,'callback':customer_return})
+
+def customer_return(ticket,responseXML):
+    with open('customerout','w') as invout:
+        invout.write(responseXML)
+    print "customer saved in file"
+            
+
 class QBWCService(spyne.Service):
     __target_namespace__ =  'http://developer.intuit.com/'
     __service_url_path__ = '/qwc'

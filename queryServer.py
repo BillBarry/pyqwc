@@ -21,22 +21,13 @@ def send_static(path):
 
 @app.route("/qwc/invoice")
 def retrieve_invoices():
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':'4'})
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text="10"
-    tree = etree.ElementTree(root)
-    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    app.config['requestQueue'].put({'reqXML':request})
-    while True:    
-        if not app.config['responseQueue'].empty():
-            msg = app.config['responseQueue'].get()
-            return render_template('syncdb.html',data=msg)
-        else:
-            time.sleep(1)
+    app.config['requestQueue'].put({'job':'retrieve_invoices'})
+    return render_template('syncdb.html',data="retrieving invoices")
 
+@app.route("/qwc/customer")
+def retrieve_customers():
+    app.config['requestQueue'].put({'job':'retrieve_customers'})
+    return render_template('syncdb.html',data="retrieving customers")
 
 @app.route("/qwc/syncToDatabase")    
 def syncToDatabase():
