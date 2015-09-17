@@ -28,9 +28,9 @@ with sqlite3.connect(dbfile) as conn:
 # trouble with ListID not being unique track that down
 table2 = 'customers'
 table2_schema = '''
-(ListID  TEXT PRIMARY KEY NOT NULL,
+(FullName  TEXT PRIMARY KEY NOT NULL,
+ListID TEXT,
 Name TEXT,
-FullName TEXT,
 CustomerType TEXT,
 json TEXT);
 '''
