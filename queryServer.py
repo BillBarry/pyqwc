@@ -6,17 +6,10 @@ from flask import Flask, render_template
 from flask.ext.spyne import Spyne
 from lxml import etree
 import time
-import db
+
 
 app = Flask(__name__, static_url_path='')
 spyne = Spyne(app)
-
-def coroutine(func):
-    def start(*args, **kwargs):
-        g = func(*args, **kwargs)
-        g.next()
-        return g
-    return start
 
 @app.route("/")
 def main():
@@ -25,7 +18,6 @@ def main():
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
-
 
 @app.route("/qwc/invoice")
 def retrieve_invoices():
@@ -47,53 +39,10 @@ def retrieve_invoices():
 
 
 @app.route("/qwc/syncToDatabase")    
-def request_all_invoices():
-    requestID=0
-    iteratorID=""
-    ticket=""
-    responseXML = ""
-    with open("responseout", "w") as file:
-            while True:
-                number_of_documents_to_retrieve_in_each_iteration = 100
-                invoiceAttributes = {}
-                if not requestID:
-                    invoiceAttributes['iterator'] = "Start"
-                else:
-                    invoiceAttributes['iterator'] = "Continue"
-                requestID +=1        
-                invoiceAttributes['requestID'] = str(requestID)
-                if iteratorID:
-                    invoiceAttributes['iteratorID'] = iteratorID
-
-                root = etree.Element("QBXML")
-                root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-                msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-                irq = etree.SubElement(msg,'InvoiceQueryRq',invoiceAttributes)
-                mrt = etree.SubElement(irq,'MaxReturned')
-                mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
-                tree = etree.ElementTree(root)
-                request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-                print "Sending request:",time.ctime()
-                app.config['requestQueue'].put({'reqXML':request,'ticket':ticket,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
-                if responseXML:
-                    print "storing",time.ctime()
-                    db.store_invoice(responseXML)
-                    print "finished storing",time.ctime()                        
-                    responseXML = ""
-                    #                while True:
-                while not app.config['responseQueue'].empty():
-                    (ticket,responseXML) = app.config['responseQueue'].get()
-                    print 'response removed from queue:',time.ctime()
-                    break
-                root = etree.fromstring(responseXML)
-                # do something with the response, store it in a database, return it somewhere etc
-                requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
-                iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
-                iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
-                print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
-                if not iteratorRemainingCount:
-                    break
-    return render_template('syncdb.html')
+def syncToDatabase():
+    app.config['requestQueue'].put({'job':'syncQBtoDB'})
+    #send a note to pyQBWC side and have syncing done there.
+    return render_template('syncdb.html',data="Syncing")
 
 
 class SomeSoapService(spyne.Service):    

@@ -5,22 +5,31 @@ from spyne.protocol.soap import Soap11
 from flask import Flask
 from flask.ext.spyne import Spyne
 import time
+import db
+from lxml import etree
+from configobj import ConfigObj
+import qbxml
 
 app = Flask(__name__)
 spyne = Spyne(app)
 
-with open('config.json') as json_config_file:
-    config = json.load(json_config_file)
+config = ConfigObj('config.ini')
+
 
 class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
         self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
 
-    def queue_requests(self):
+    def check_requests(self):
         #checks the process requestQueue to see if there are any requests, if so, put them in sessionQueue
         while not app.config['requestQueue'].empty():
             print 'queuing request',time.ctime()
-            msg = app.config['requestQueue'].get()
+            req = app.config['requestQueue'].get()
+            #interpret the msg fire off the correct function it will return a session to be put in the sessionqueue
+            if req['job'] == 'syncQBtoDB':
+                syncQBtoDB()
+
+    def queue_session(self,msg):
             #when called create a session ticket and stuff it in the store
             if 'ticket' not in msg or not msg['ticket']:
                 ticket =  str(uuid.uuid1())
@@ -38,19 +47,16 @@ class qbwcSessionManager():
                 minimumUpdateSeconds = msg['minimumUpdateSeconds']
             else:
                 minimumUpdateSeconds = 15    
-            self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
+            self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"callback":msg["callback"],"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
     
     def get_session(self):
-        self.queue_requests()
+        self.check_requests()
         if self.sessionQueue:
             return self.sessionQueue[0]
         else:
             return ""
-    
         
     def send_request(self,ticket):
-        print "in send_request",time.ctime()
-        self.queue_requests()
         if ticket == self.sessionQueue[0]['ticket']:
             ret = self.sessionQueue[0]['reqXML']
             return ret
@@ -59,18 +65,41 @@ class qbwcSessionManager():
             return ""
         
     def return_response(self,ticket, response):
-        #self.queue_requests()
-        
-        #perform the callback to return the data to the requestor
-        #remove the session from the queue
-        print 'in return response',time.ctime()
         if ticket == self.sessionQueue[0]['ticket']:
-            app.config['responseQueue'].put((ticket,response))
+            callback = self.sessionQueue[0]['callback']
             self.sessionQueue.pop(0)
+            print 'callback',callback
+            callback(ticket,response)
         else:
             app.logger.debug("tickets do not match. There is trouble somewhere")
             return ""
 
+
+def syncQBtoDB():
+    get_invoices()
+        
+def get_invoices():
+    request = qbxml.invoice_request_iterative()
+    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_invoices,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+
+def iterate_invoices(ticket,responseXML):
+    print "storing",responseXML,time.ctime()
+    db.insert_invoice(responseXML)
+    print "finished storing",time.ctime()                        
+
+    root = etree.fromstring(responseXML)
+    # do something with the response, store it in a database, return it somewhere etc
+    requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
+    iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
+    iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
+    print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
+    if iteratorRemainingCount:
+        requestID +=1
+        request = qbxml.invoice_request_iterative(requestID=requestID,iteratorID=iteratorID)
+        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_invoices,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+
+
+        
 #class QBWCService(ServiceBase):        
 class QBWCService(spyne.Service):
     __target_namespace__ =  'http://developer.intuit.com/'
@@ -88,20 +117,18 @@ class QBWCService(spyne.Service):
         """
         returnArray = []
         # or maybe config should have a hash of usernames and salted hashed passwords
-        if strUserName == config['UserName'] and strPassword == config['Password']:
+        if strUserName == config['qwc']['username'] and strPassword == config['qwc']['password']:
             print "authenticated",time.ctime()
             session = session_manager.get_session()
             if 'ticket' in session:
                 returnArray.append(session['ticket'])
-                returnArray.append(config['qbwFilename']) # returning the filename indicates there is a request in the queue
+                returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
                 returnArray.append(str(session['updatePauseSeconds']))
-                #returnArray.append("")
-                #returnArray.append("")
                 returnArray.append(str(session['minimumUpdateSeconds']))
                 returnArray.append(str(session['MinimumRunEveryNSeconds']))                        
             else:
                 print "don't have ticket"
-                returnArray.append("") # don't return a ticket if there are no requests
+                returnArray.append("none") # don't return a ticket if there are no requests
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
             returnArray.append("no ticket") # don't return a ticket if username password does not authenticate
@@ -172,11 +199,9 @@ class QBWCService(spyne.Service):
         @param message error message
         @return string done indicating web service is finished.
         """
-        print 'receiveResponseXML a',time.ctime()
+        print 'receiveResponseXML',time.ctime()
         app.logger.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
         session_manager.return_response(ticket,response)
-        print 'response queued',time.ctime()
-        #time.sleep(15) # hack
         return 10
 
 session_manager = qbwcSessionManager()
