@@ -23,7 +23,6 @@ class qbwcSessionManager():
     def check_requests(self):
         #checks the process requestQueue to see if there are any requests, if so, put them in sessionQueue
         while not app.config['requestQueue'].empty():
-            print 'queuing request',time.ctime()
             req = app.config['requestQueue'].get()
             #interpret the msg fire off the correct function it will return a session to be put in the sessionqueue
             if req['job'] == 'syncQBtoDB':
@@ -90,7 +89,6 @@ def iterate_invoices_start():
     session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_invoices_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def iterate_invoices_continue(ticket,responseXML):
-    print "storing",time.ctime()
     db.insert_invoice(responseXML)
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
@@ -108,9 +106,7 @@ def iterate_customers_start():
     session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_customers_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def iterate_customers_continue(ticket,responseXML):
-    print "storing",time.ctime()
     db.insert_customer(responseXML)
-    print "finished storing",time.ctime()                        
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
     requestID = int(root.xpath('//CustomerQueryRs/@requestID')[0])
@@ -120,7 +116,7 @@ def iterate_customers_continue(ticket,responseXML):
     if iteratorRemainingCount:
         requestID +=1
         request = qbxml.customer_request_iterative(requestID=requestID,iteratorID=iteratorID)
-        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_customerss_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_customers_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def retrieve_invoices():            
     root = etree.Element("QBXML")
@@ -251,7 +247,6 @@ class QBWCService(spyne.Service):
         @param message error message
         @return string done indicating web service is finished.
         """
-        print 'receiveResponseXML',time.ctime()
         app.logger.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
         session_manager.return_response(ticket,response)
         return 10

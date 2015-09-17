@@ -16,8 +16,7 @@ TxnDate   DATE,
 RefNumber TEXT,
 Subtotal  REAL,
 BalanceRemaining REAL,
-IsPaid BOOLEAN,
-json TEXT);
+IsPaid BOOLEAN);
 '''
 
 sql = 'create table if not exists ' + table1 + table1_schema
@@ -28,11 +27,10 @@ with sqlite3.connect(dbfile) as conn:
 # trouble with ListID not being unique track that down
 table2 = 'customers'
 table2_schema = '''
-(FullName  TEXT PRIMARY KEY NOT NULL,
-ListID TEXT,
+(ListID  TEXT PRIMARY KEY NOT NULL,
+FullName TEXT,
 Name TEXT,
-CustomerType TEXT,
-json TEXT);
+CustomerType TEXT);
 '''
 
 sql = 'create table if not exists ' + table2 + table2_schema
