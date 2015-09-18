@@ -71,17 +71,21 @@ def insert_record(responseXML,querytype=""):
                 CustomerType = i["CustomerTypeRef"]["FullName"]
                 conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],CustomerType))
 
-    elif querytype == 'Item':
-        (ListID,Name,FullName,IsActive,SalesDesc,SalesPrice,PurchaseCost,IncomeAccountRef_FullName,AssetAccountRef_FullName,QuantityOnHand)
-
-        insertsql = "INSERT INTO items (ListID,Name,FullName,IsActive,SalesDesc,SalesPrice,PurchaseCost,IncomeAccountRef_FullName,AssetAccountRef_FullName,QuantityOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        with sqlite3.connect(dbfile, detect_types=sqlite3.PARSE_DECLTYPES) as conn:            
+    elif querytype == 'ItemInventory':
+        insertsql = "INSERT INTO inventoryitems (ListID,Name,FullName,IsActive,SalesDesc,SalesPrice,PurchaseCost,IncomeAccountRef_FullName,AssetAccountRef_FullName,QuantityOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        with sqlite3.connect(dbfile, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
             doc = xmltodict.parse(responseXML)
-            inv = doc["QBXML"]["QBXMLMsgsRs"]["ItemQueryRs"]["CustomerRet"]
+            inv = doc["QBXML"]["QBXMLMsgsRs"]["ItemInventoryQueryRs"]["ItemInventoryRet"]
             if type(inv) is list:
                 for i in inv:
-                    IncomeAccountRef_FullName = i["IncomeAccountRef"]["FullName"]
-                    AssetAccountRef_FullName = i["AssetAccountRef"]["FullName"]
+                    if "IncomeAccountRef" in i:
+                        IncomeAccountRef_FullName = i["IncomeAccountRef"]["FullName"]
+                    else:
+                        IncomeAccountRef_FullName = ""
+                    if "AssetAccountRef" in i:
+                        AssetAccountRef_FullName = i["AssetAccountRef"]["FullName"]
+                    else:
+                        AssetAccountRef_FullName = ""
                     try:
                         conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],i['IsActive'],i['SalesDesc'],
                                                  i['SalesPrice'],i['PurchaseCost'],IncomeAccountRef_FullName,AssetAccountRef_FullName,i['QuantityOnHand']))
@@ -89,8 +93,14 @@ def insert_record(responseXML,querytype=""):
                         pass
             else:
                 i = inv
-                IncomeAccountRef_FullName = i["IncomeAccountRef"]["FullName"]
-                AssetAccountRef_FullName = i["AssetAccountRef"]["FullName"]
+                if "IncomeAccountRef" in i:
+                    IncomeAccountRef_FullName = i["IncomeAccountRef"]["FullName"]
+                else:
+                    IncomeAccountRef_FullName = ""
+                if "AssetAccountRef" in i:
+                    AssetAccountRef_FullName = i["AssetAccountRef"]["FullName"]
+                else:
+                    AssetAccountRef_FullName = ""
                 conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],i['IsActive'],i['SalesDesc'],i['SalesPrice'],
                                          i['PurchaseCost'],IncomeAccountRef_FullName,AssetAccountRef_FullName,i['QuantityOnHand']))
 

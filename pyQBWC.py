@@ -87,7 +87,8 @@ def syncQBtoDB(querytype=''):
 
 def iterate_retrieve_start(querytype=''):
     request = qbxml.iterative_query_request(querytype=querytype)
-    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_retrieve_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_retrieve_continue,'querytype':querytype,
+                                   'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def iterate_retrieve_continue(ticket="",responseXML="",querytype=""):
     db.insert_record(responseXML,querytype=querytype)
@@ -100,7 +101,8 @@ def iterate_retrieve_continue(ticket="",responseXML="",querytype=""):
     if iteratorRemainingCount:
         requestID +=1
         request = qbxml.iterative_query_request(requestID=requestID,iteratorID=iteratorID,querytype=querytype)
-        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_retrieve_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_retrieve_continue,'querytype':querytype,
+                                       'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def retrieve_start(querytype=''):
     print 'retrieve_start'
@@ -110,8 +112,9 @@ def retrieve_start(querytype=''):
     irq = etree.SubElement(msg,querytype+'QueryRq',{'requestID':'4'})
     mrt = etree.SubElement(irq,'MaxReturned')
     mrt.text="10"
-    incitems = etree.SubElement(irq,'IncludeLineItems')
-    incitems.text="true"
+    if querytype == 'Invoice':
+        incitems = etree.SubElement(irq,'IncludeLineItems')
+        incitems.text="true"
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     session_manager.queue_session({'reqXML':request,'callback':retrieve_return,'querytype':querytype})

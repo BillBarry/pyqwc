@@ -52,7 +52,7 @@ sql = 'create table if not exists ' + table3 + table3_schema
 with sqlite3.connect(dbfile) as conn:
     conn.execute(sql)
 
-table4 = 'items'
+table4 = 'inventoryitems'
 table4_schema = '''
 (ListID  TEXT PRIMARY KEY NOT NULL,
 Name TEXT,
