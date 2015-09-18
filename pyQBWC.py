@@ -9,7 +9,7 @@ import db
 from lxml import etree
 from configobj import ConfigObj
 import qbxml
-
+ 
 app = Flask(__name__)
 spyne = Spyne(app)
 
@@ -26,11 +26,9 @@ class qbwcSessionManager():
             req = app.config['requestQueue'].get()
             #interpret the msg fire off the correct function it will return a session to be put in the sessionqueue
             if req['job'] == 'syncQBtoDB':
-                syncQBtoDB()
-            elif req['job'] == 'retrieve_invoices':
-                retrieve_invoices()
-            elif req['job'] == 'retrieve_customers':
-                retrieve_customers()
+                syncQBtoDB(querytype=req['querytype'])
+            elif req['job'] == 'retrieve_records':
+                retrieve_start(querytype=req['querytype'])
             else:
                 return
 
@@ -80,74 +78,42 @@ class qbwcSessionManager():
             return ""
 
 
-def syncQBtoDB():
-    #iterate_invoices_start()
-    iterate_customers_start()
+def syncQBtoDB(querytype=''):
+    iterate_retrieve_start(querytype)
         
-def iterate_invoices_start():
-    request = qbxml.invoice_request_iterative()
-    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_invoices_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
-def iterate_invoices_continue(ticket,responseXML):
-    db.insert_invoice(responseXML)
+def iterate_retrieve_start(querytype=''):
+    request = qbxml.iterative_query_request(querytype=querytype)
+    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_query_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+
+def iterate_retrieve_continue(ticket="",responseXML="",querytype=""):
+    db.insert_record(responseXML,type=querytype)
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
-    requestID = int(root.xpath('//InvoiceQueryRs/@requestID')[0])
-    iteratorRemainingCount = int(root.xpath('//InvoiceQueryRs/@iteratorRemainingCount')[0])
-    iteratorID = root.xpath('//InvoiceQueryRs/@iteratorID')[0]
+    requestID = int(root.xpath('//'+querytype+'QueryRs/@requestID')[0])
+    iteratorRemainingCount = int(root.xpath('//'+querytype'+QueryRs/@iteratorRemainingCount')[0])
+    iteratorID = root.xpath('//'+querytype+'QueryRs/@iteratorID')[0]
     print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
     if iteratorRemainingCount:
         requestID +=1
-        request = qbxml.invoice_request_iterative(requestID=requestID,iteratorID=iteratorID)
-        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_invoices_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+        request = qbxml.iterative_query_request(requestID=requestID,iteratorID=iteratorID,type=querytype)
+        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_query_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
-def iterate_customers_start():
-    request = qbxml.customer_request_iterative()
-    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_customers_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
-
-def iterate_customers_continue(ticket,responseXML):
-    db.insert_customer(responseXML)
-    root = etree.fromstring(responseXML)
-    # do something with the response, store it in a database, return it somewhere etc
-    requestID = int(root.xpath('//CustomerQueryRs/@requestID')[0])
-    iteratorRemainingCount = int(root.xpath('//CustomerQueryRs/@iteratorRemainingCount')[0])
-    iteratorID = root.xpath('//CustomerQueryRs/@iteratorID')[0]
-    print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
-    if iteratorRemainingCount:
-        requestID +=1
-        request = qbxml.customer_request_iterative(requestID=requestID,iteratorID=iteratorID)
-        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_customers_continue,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
-
-def retrieve_invoices():            
+def retrieve_start(querytype=''):            
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',{'requestID':'4'})
+    irq = etree.SubElement(msg,querytype+'QueryRq',{'requestID':'4'})
     mrt = etree.SubElement(irq,'MaxReturned')
     mrt.text="10"
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.queue_session({'reqXML':request,'callback':invoice_return})
+    session_manager.queue_session({'reqXML':request,'callback':retrieve_return,'querytype':querytype})
 
-def invoice_return(ticket,responseXML):
-    with open('invoiceout','w') as invout:
-        invout.write(responseXML)
-    print "invoice saved in file"
-def retrieve_customers():            
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'CustomerQueryRq',{'requestID':'4'})
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text="10"
-    tree = etree.ElementTree(root)
-    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.queue_session({'reqXML':request,'callback':customer_return})
-
-def customer_return(ticket,responseXML):
-    with open('customerout','w') as invout:
-        invout.write(responseXML)
-    print "customer saved in file"
+def retrieve_return(ticket,responseXML,querytype=''):
+    with open(querytype,'w') as recout:
+        recout.write(responseXML)
+    print querytype," saved in file"
             
 
 class QBWCService(spyne.Service):

@@ -19,21 +19,22 @@ def main():
 def send_static(path):
     return send_from_directory('static', path)
 
-@app.route("/qwc/invoice")
-def retrieve_invoices():
-    app.config['requestQueue'].put({'job':'retrieve_invoices'})
-    return render_template('syncdb.html',data="retrieving invoices")
 
-@app.route("/qwc/customer")
-def retrieve_customers():
-    app.config['requestQueue'].put({'job':'retrieve_customers'})
-    return render_template('syncdb.html',data="retrieving customers")
+@app.route("/qwc/<querytype>")
+def retrieve_records():
+    # prevent xss
+    if  querytype == 'invoice' or querytype == 'customer' or querytype == 'item':
+        querytype.capitalize()
+        app.config['requestQueue'].put({'job':'retrieve_records','querytype':querytype})
+        return render_template('syncdb.html',data="retrieving",querytype)
 
-@app.route("/qwc/syncToDatabase")    
+@app.route("/qwc/synctodatabase/<querytype>")    
 def syncToDatabase():
-    app.config['requestQueue'].put({'job':'syncQBtoDB'})
-    #send a note to pyQBWC side and have syncing done there.
-    return render_template('syncdb.html',data="Syncing")
+    if  querytype == 'invoice' or querytype == 'customer' or querytype == 'item':
+        querytype.capitalize()
+        app.config['requestQueue'].put({'job':'syncQBtoDB','querytype':querytype})
+        #send a note to pyQBWC side and have syncing done there.
+        return render_template('syncdb.html',data="Syncing "+querytype)
 
 
 class SomeSoapService(spyne.Service):    
@@ -50,3 +51,5 @@ class SomeSoapService(spyne.Service):
 if __name__ == "__main__":
     app.run(port=5000,debug=True)
 
+
+    
