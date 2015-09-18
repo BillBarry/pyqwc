@@ -72,24 +72,25 @@ def insert_record(responseXML,querytype=""):
                 conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],CustomerType))
 
     elif querytype == 'Item':
-        insertsql = "INSERT INTO items (ListID,Name,FullName,CustomerType)VALUES (?, ?, ?, ?)"
+        (ListID,Name,FullName,IsActive,SalesDesc,SalesPrice,PurchaseCost,IncomeAccountRef_FullName,AssetAccountRef_FullName,QuantityOnHand)
+
+        insertsql = "INSERT INTO items (ListID,Name,FullName,IsActive,SalesDesc,SalesPrice,PurchaseCost,IncomeAccountRef_FullName,AssetAccountRef_FullName,QuantityOnHand) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         with sqlite3.connect(dbfile, detect_types=sqlite3.PARSE_DECLTYPES) as conn:            
             doc = xmltodict.parse(responseXML)
-            inv = doc["QBXML"]["QBXMLMsgsRs"]["CustomerQueryRs"]["CustomerRet"]
+            inv = doc["QBXML"]["QBXMLMsgsRs"]["ItemQueryRs"]["CustomerRet"]
             if type(inv) is list:
                 for i in inv:
-                    if "CustomerTypeRef" in i:
-                        CustomerType = i["CustomerTypeRef"]["FullName"]
-                    else:
-                        CustomerType = ""
+                    IncomeAccountRef_FullName = i["IncomeAccountRef"]["FullName"]
+                    AssetAccountRef_FullName = i["AssetAccountRef"]["FullName"]
                     try:
-                        conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],CustomerType))
+                        conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],i['IsActive'],i['SalesDesc'],
+                                                 i['SalesPrice'],i['PurchaseCost'],IncomeAccountRef_FullName,AssetAccountRef_FullName,i['QuantityOnHand']))
                     except:
-                        #print "DB not unique",i["ListID"],i["FullName"]
                         pass
             else:
                 i = inv
-                CustomerType = i["CustomerTypeRef"]["FullName"]
-                conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],CustomerType))
-
+                IncomeAccountRef_FullName = i["IncomeAccountRef"]["FullName"]
+                AssetAccountRef_FullName = i["AssetAccountRef"]["FullName"]
+                conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],i['IsActive'],i['SalesDesc'],i['SalesPrice'],
+                                         i['PurchaseCost'],IncomeAccountRef_FullName,AssetAccountRef_FullName,i['QuantityOnHand']))
 
