@@ -71,4 +71,25 @@ def insert_record(responseXML,querytype=""):
                 CustomerType = i["CustomerTypeRef"]["FullName"]
                 conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],CustomerType))
 
+    elif querytype == 'Item':
+        insertsql = "INSERT INTO items (ListID,Name,FullName,CustomerType)VALUES (?, ?, ?, ?)"
+        with sqlite3.connect(dbfile, detect_types=sqlite3.PARSE_DECLTYPES) as conn:            
+            doc = xmltodict.parse(responseXML)
+            inv = doc["QBXML"]["QBXMLMsgsRs"]["CustomerQueryRs"]["CustomerRet"]
+            if type(inv) is list:
+                for i in inv:
+                    if "CustomerTypeRef" in i:
+                        CustomerType = i["CustomerTypeRef"]["FullName"]
+                    else:
+                        CustomerType = ""
+                    try:
+                        conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],CustomerType))
+                    except:
+                        #print "DB not unique",i["ListID"],i["FullName"]
+                        pass
+            else:
+                i = inv
+                CustomerType = i["CustomerTypeRef"]["FullName"]
+                conn.execute(insertsql, (i["ListID"],i["Name"],i['FullName'],CustomerType))
+
 

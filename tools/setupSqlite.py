@@ -51,3 +51,25 @@ TxnDate Date);
 sql = 'create table if not exists ' + table3 + table3_schema
 with sqlite3.connect(dbfile) as conn:
     conn.execute(sql)
+
+table4 = 'items'
+table4_schema = '''
+(ListID  TEXT PRIMARY KEY NOT NULL,
+Name TEXT,
+FullName TEXT,
+IsActive BOOLEAN,
+SalesDesc TEXT,
+SalesPrice REAL,
+PurchaseCost REAL,
+IncomeAccountRef_FullName TEXT,
+AssetAccountRef_FullName TEXT,
+QuantityOnHand INTEGER);
+'''
+
+sql = 'create table if not exists ' + table4 + table4_schema
+with sqlite3.connect(dbfile) as conn:
+    conn.execute(sql)
+
+
+
+    
