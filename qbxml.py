@@ -1,6 +1,6 @@
 from lxml import etree
 
-def invoice_request_iterative(requestID=1,iteratorID=""):
+def iterative_query_request(requestID=1,iteratorID="",querytype=""):
     number_of_documents_to_retrieve_in_each_iteration = 100
     attributes = {}
     if not iteratorID:
@@ -12,47 +12,12 @@ def invoice_request_iterative(requestID=1,iteratorID=""):
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'InvoiceQueryRq',attributes)
+    irq = etree.SubElement(msg,querytype+'QueryRq',attributes)
     mrt = etree.SubElement(irq,'MaxReturned')
     mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
-    tree = etree.ElementTree(root)
-    requestxml = etree.tostring(tree, xml_declaration=True, encoding='UTF-8')
-    return requestxml
-
-def customer_request_iterative(requestID=1,iteratorID=""):
-    number_of_documents_to_retrieve_in_each_iteration = 100
-    attributes = {}
-    if not iteratorID:
-        attributes['iterator'] = "Start"
-    else:
-        attributes['iterator'] = "Continue"
-        attributes['iteratorID'] = iteratorID        
-    attributes['requestID'] = str(requestID)
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'CustomerQueryRq',attributes)
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
-    tree = etree.ElementTree(root)
-    requestxml = etree.tostring(tree, xml_declaration=True, encoding='UTF-8')
-    return requestxml
-
-def customer_request_iterative(requestID=1,iteratorID=""):
-    number_of_documents_to_retrieve_in_each_iteration = 100
-    attributes = {}
-    if not iteratorID:
-        attributes['iterator'] = "Start"
-    else:
-        attributes['iterator'] = "Continue"
-        attributes['iteratorID'] = iteratorID        
-    attributes['requestID'] = str(requestID)
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,'CustomerQueryRq',attributes)
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text= str(number_of_documents_to_retrieve_in_each_iteration)
+    if querytype == 'Invoices':
+        incitems = etree.SubElement(irq,'IncludeLineItems')
+        incitems.text="true"
     tree = etree.ElementTree(root)
     requestxml = etree.tostring(tree, xml_declaration=True, encoding='UTF-8')
     return requestxml

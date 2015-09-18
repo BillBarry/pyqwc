@@ -36,3 +36,18 @@ CustomerType TEXT);
 sql = 'create table if not exists ' + table2 + table2_schema
 with sqlite3.connect(dbfile) as conn:
     conn.execute(sql)
+
+table3 = 'invoice_line'
+table3_schema = '''
+(TxnLineID  TEXT PRIMARY KEY NOT NULL,
+CustomerRef_FullName TEXT,
+CustomerRef_ListID TEXT,
+ItemRef_ListID TEXT,
+ItemRef_FullName Text,
+Quantity Text,
+TxnDate Date);
+'''
+
+sql = 'create table if not exists ' + table3 + table3_schema
+with sqlite3.connect(dbfile) as conn:
+    conn.execute(sql)

@@ -24,6 +24,7 @@ class qbwcSessionManager():
         #checks the process requestQueue to see if there are any requests, if so, put them in sessionQueue
         while not app.config['requestQueue'].empty():
             req = app.config['requestQueue'].get()
+            print 'received request',req
             #interpret the msg fire off the correct function it will return a session to be put in the sessionqueue
             if req['job'] == 'syncQBtoDB':
                 syncQBtoDB(querytype=req['querytype'])
@@ -33,24 +34,25 @@ class qbwcSessionManager():
                 return
 
     def queue_session(self,msg):
-            #when called create a session ticket and stuff it in the store
-            if 'ticket' not in msg or not msg['ticket']:
-                ticket =  str(uuid.uuid1())
-            else:
-                ticket = msg['ticket']
-            if 'updatePauseSeconds' in msg:
-                updatePauseSeconds = msg['updatePauseSeconds']
-            else:
-                updatePauseSeconds = 0    
-            if 'MinimumRunEveryNSeconds' in msg:
-                MinimumRunEveryNSeconds = msg['MinimumRunEveryNSeconds']
-            else:
-                MinimumRunEveryNSeconds = 15    
-            if 'minimumUpdateSeconds' in msg:
-                minimumUpdateSeconds = msg['minimumUpdateSeconds']
-            else:
-                minimumUpdateSeconds = 15    
-            self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"callback":msg["callback"],"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
+        print 'queing',msg
+        #when called create a session ticket and stuff it in the store
+        if 'ticket' not in msg or not msg['ticket']:
+            ticket =  str(uuid.uuid1())
+        else:
+            ticket = msg['ticket']
+        if 'updatePauseSeconds' in msg:
+            updatePauseSeconds = msg['updatePauseSeconds']
+        else:
+            updatePauseSeconds = 0    
+        if 'MinimumRunEveryNSeconds' in msg:
+            MinimumRunEveryNSeconds = msg['MinimumRunEveryNSeconds']
+        else:
+            MinimumRunEveryNSeconds = 15    
+        if 'minimumUpdateSeconds' in msg:
+            minimumUpdateSeconds = msg['minimumUpdateSeconds']
+        else:
+            minimumUpdateSeconds = 15    
+        self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"callback":msg["callback"],"querytype":msg["querytype"],"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
     
     def get_session(self):
         self.check_requests()
@@ -71,8 +73,9 @@ class qbwcSessionManager():
     def return_response(self,ticket, response):
         if ticket == self.sessionQueue[0]['ticket']:
             callback = self.sessionQueue[0]['callback']
+            querytype = self.sessionQueue[0]['querytype']
             self.sessionQueue.pop(0)
-            callback(ticket,response)
+            callback(ticket,response,querytype)
         else:
             app.logger.debug("tickets do not match. There is trouble somewhere")
             return ""
@@ -84,33 +87,37 @@ def syncQBtoDB(querytype=''):
 
 def iterate_retrieve_start(querytype=''):
     request = qbxml.iterative_query_request(querytype=querytype)
-    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_query_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_retrieve_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
 def iterate_retrieve_continue(ticket="",responseXML="",querytype=""):
-    db.insert_record(responseXML,type=querytype)
+    db.insert_record(responseXML,querytype=querytype)
     root = etree.fromstring(responseXML)
     # do something with the response, store it in a database, return it somewhere etc
     requestID = int(root.xpath('//'+querytype+'QueryRs/@requestID')[0])
-    iteratorRemainingCount = int(root.xpath('//'+querytype'+QueryRs/@iteratorRemainingCount')[0])
+    iteratorRemainingCount = int(root.xpath('//'+querytype+'QueryRs/@iteratorRemainingCount')[0])
     iteratorID = root.xpath('//'+querytype+'QueryRs/@iteratorID')[0]
     print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
     if iteratorRemainingCount:
         requestID +=1
-        request = qbxml.iterative_query_request(requestID=requestID,iteratorID=iteratorID,type=querytype)
-        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_query_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
+        request = qbxml.iterative_query_request(requestID=requestID,iteratorID=iteratorID,querytype=querytype)
+        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_retrieve_continue,'querytype':querytype,'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
 
-def retrieve_start(querytype=''):            
+def retrieve_start(querytype=''):
+    print 'retrieve_start'
     root = etree.Element("QBXML")
     root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
     msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
     irq = etree.SubElement(msg,querytype+'QueryRq',{'requestID':'4'})
     mrt = etree.SubElement(irq,'MaxReturned')
     mrt.text="10"
+    incitems = etree.SubElement(irq,'IncludeLineItems')
+    incitems.text="true"
     tree = etree.ElementTree(root)
     request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     session_manager.queue_session({'reqXML':request,'callback':retrieve_return,'querytype':querytype})
 
 def retrieve_return(ticket,responseXML,querytype=''):
+    print 'retrieve_return',responseXML
     with open(querytype,'w') as recout:
         recout.write(responseXML)
     print querytype," saved in file"

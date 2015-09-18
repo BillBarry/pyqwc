@@ -21,17 +21,19 @@ def send_static(path):
 
 
 @app.route("/qwc/<querytype>")
-def retrieve_records():
+def retrieve_records(querytype):
     # prevent xss
+
     if  querytype == 'invoice' or querytype == 'customer' or querytype == 'item':
-        querytype.capitalize()
+        querytype = querytype.capitalize()
+        print 'retrive_records ',querytype
         app.config['requestQueue'].put({'job':'retrieve_records','querytype':querytype})
-        return render_template('syncdb.html',data="retrieving",querytype)
+        return render_template('syncdb.html',data="retrieving "+querytype)
 
 @app.route("/qwc/synctodatabase/<querytype>")    
-def syncToDatabase():
+def syncToDatabase(querytype):
     if  querytype == 'invoice' or querytype == 'customer' or querytype == 'item':
-        querytype.capitalize()
+        querytype = querytype.capitalize()
         app.config['requestQueue'].put({'job':'syncQBtoDB','querytype':querytype})
         #send a note to pyQBWC side and have syncing done there.
         return render_template('syncdb.html',data="Syncing "+querytype)
