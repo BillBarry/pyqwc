@@ -2,13 +2,11 @@ import json
 import uuid
 from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode, Iterable, ComplexModel
 from spyne.protocol.soap import Soap11
-from flask import Flask
+from flask import Flask, request
 from flask.ext.spyne import Spyne
 import time
-import db
 from lxml import etree
 from configobj import ConfigObj
-import qbxml
  
 app = Flask(__name__)
 spyne = Spyne(app)
@@ -16,46 +14,32 @@ spyne = Spyne(app)
 config = ConfigObj('config.ini')
 
 
+def returnxml(responseXML):
+    return responseXML
+
+@app.route("/api/xml")
+def receivexml():
+    #get the xml from the request
+    reqXML = request.args.get('requestxml', '')
+    print "request",request.data
+    print "first hello"
+    session_manager.queue_session({'reqXML':request,'callback':returnxml})
+
+
+
 class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
-        self.sessionQueue = sessionQueue  # this is a first in last out queue, i.e. a stack
-
-    def check_requests(self):
-        #checks the process requestQueue to see if there are any requests, if so, put them in sessionQueue
-        while not app.config['requestQueue'].empty():
-            req = app.config['requestQueue'].get()
-            print 'received request',req
-            #interpret the msg fire off the correct function it will return a session to be put in the sessionqueue
-            if req['job'] == 'syncQBtoDB':
-                syncQBtoDB(querytype=req['querytype'])
-            elif req['job'] == 'retrieve_records':
-                retrieve_start(querytype=req['querytype'])
-            else:
-                return
+        # this is a first in last out queue, i.e. a stack
+        self.sessionQueue = sessionQueue  
 
     def queue_session(self,msg):
-        print 'queing',msg
-        #when called create a session ticket and stuff it in the store
         if 'ticket' not in msg or not msg['ticket']:
             ticket =  str(uuid.uuid1())
         else:
             ticket = msg['ticket']
-        if 'updatePauseSeconds' in msg:
-            updatePauseSeconds = msg['updatePauseSeconds']
-        else:
-            updatePauseSeconds = 0    
-        if 'MinimumRunEveryNSeconds' in msg:
-            MinimumRunEveryNSeconds = msg['MinimumRunEveryNSeconds']
-        else:
-            MinimumRunEveryNSeconds = 15    
-        if 'minimumUpdateSeconds' in msg:
-            minimumUpdateSeconds = msg['minimumUpdateSeconds']
-        else:
-            minimumUpdateSeconds = 15    
-        self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"callback":msg["callback"],"querytype":msg["querytype"],"updatePauseSeconds":updatePauseSeconds,"minimumUpdateSeconds":minimumUpdateSeconds,"MinimumRunEveryNSeconds":MinimumRunEveryNSeconds})
+        self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"callback":msg["callback"]})
     
     def get_session(self):
-        self.check_requests()
         if self.sessionQueue:
             return self.sessionQueue[0]
         else:
@@ -73,58 +57,11 @@ class qbwcSessionManager():
     def return_response(self,ticket, response):
         if ticket == self.sessionQueue[0]['ticket']:
             callback = self.sessionQueue[0]['callback']
-            querytype = self.sessionQueue[0]['querytype']
             self.sessionQueue.pop(0)
-            callback(ticket,response,querytype)
+            callback(ticket,response)
         else:
             app.logger.debug("tickets do not match. There is trouble somewhere")
             return ""
-
-
-def syncQBtoDB(querytype=''):
-    iterate_retrieve_start(querytype)
-        
-
-def iterate_retrieve_start(querytype=''):
-    request = qbxml.iterative_query_request(querytype=querytype)
-    session_manager.queue_session({'reqXML':request,'ticket':"",'callback':iterate_retrieve_continue,'querytype':querytype,
-                                   'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
-
-def iterate_retrieve_continue(ticket="",responseXML="",querytype=""):
-    db.insert_record(responseXML,querytype=querytype)
-    root = etree.fromstring(responseXML)
-    # do something with the response, store it in a database, return it somewhere etc
-    requestID = int(root.xpath('//'+querytype+'QueryRs/@requestID')[0])
-    iteratorRemainingCount = int(root.xpath('//'+querytype+'QueryRs/@iteratorRemainingCount')[0])
-    iteratorID = root.xpath('//'+querytype+'QueryRs/@iteratorID')[0]
-    print "iteratorID",iteratorID,"iteratorRemainingCount:",iteratorRemainingCount,'requestID',requestID
-    if iteratorRemainingCount:
-        requestID +=1
-        request = qbxml.iterative_query_request(requestID=requestID,iteratorID=iteratorID,querytype=querytype)
-        session_manager.queue_session({'reqXML':request,'ticket':ticket,'callback':iterate_retrieve_continue,'querytype':querytype,
-                                       'updatePauseSeconds':"",'minimumUpdateSeconds':60,'MinimumRunEveryNSeconds':45})
-
-def retrieve_start(querytype=''):
-    print 'retrieve_start'
-    root = etree.Element("QBXML")
-    root.addprevious(etree.ProcessingInstruction("qbxml", "version=\"8.0\""))
-    msg = etree.SubElement(root,'QBXMLMsgsRq', {'onError':'stopOnError'})
-    irq = etree.SubElement(msg,querytype+'QueryRq',{'requestID':'4'})
-    mrt = etree.SubElement(irq,'MaxReturned')
-    mrt.text="10"
-    if querytype == 'Invoice':
-        incitems = etree.SubElement(irq,'IncludeLineItems')
-        incitems.text="true"
-    tree = etree.ElementTree(root)
-    request = etree.tostring(tree, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    session_manager.queue_session({'reqXML':request,'callback':retrieve_return,'querytype':querytype})
-
-def retrieve_return(ticket,responseXML,querytype=''):
-    print 'retrieve_return',responseXML
-    with open(querytype,'w') as recout:
-        recout.write(responseXML)
-    print querytype," saved in file"
-            
 
 class QBWCService(spyne.Service):
     __target_namespace__ =  'http://developer.intuit.com/'
@@ -148,9 +85,6 @@ class QBWCService(spyne.Service):
             if 'ticket' in session:
                 returnArray.append(session['ticket'])
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
-                returnArray.append(str(session['updatePauseSeconds']))
-                returnArray.append(str(session['minimumUpdateSeconds']))
-                returnArray.append(str(session['MinimumRunEveryNSeconds']))                        
             else:
                 returnArray.append("none") # don't return a ticket if there are no requests
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
@@ -191,7 +125,7 @@ class QBWCService(spyne.Service):
 
     @spyne.srpc(Unicode,  _returns=Unicode)
     def getLastError( ticket ):
-        """ sends Web connector version to this service
+        """  Web connector error message
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
@@ -221,14 +155,22 @@ class QBWCService(spyne.Service):
         @param response qbXML response from QuickBooks
         @param hresult The HRESULT (in HEX) from any exception 
         @param message error message
-        @return string done indicating web service is finished.
+        @return string integer returned 100 means done anything less means there is more to come.
+              where can we best get that information?
         """
         app.logger.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
         session_manager.return_response(ticket,response)
+
+        #need to make this return be 100 if we are really done.
         return 10
+    
 
 session_manager = qbwcSessionManager()
 
+
+
+
+
 if __name__ == '__main__':
-    app.run(port=8000, debug=True)
+    app.run(port=8000, debug=False)
 
