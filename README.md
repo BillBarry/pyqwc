@@ -14,6 +14,10 @@ The spyne Hello World [example](http://spyne.io/docs/2.10/manual/02_helloworld.h
 
 Flask-spyne module [examples](https://github.com/rayrapetyan/flask-spyne)
 
+Reference source for [QBooks SDK](https://developer-static.intuit.com/qbSDK-current/Common/newOSR/index.html)
+
+Nice explanation on how to [install the qwc file](http://www.nsoftware.com/kb/articles/qbwc.rst)
+
 A file config.ini is needed but not included in the distribution. Here is an example.
 
 ```
