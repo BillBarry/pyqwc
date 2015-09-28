@@ -1,15 +1,13 @@
-import json
 import uuid
 from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode, Iterable, ComplexModel
 from spyne.protocol.soap import Soap11
-from flask import Flask, request
-from flask.ext.spyne import Spyne
+from spyne.protocol.http import HttpRpc
+from spyne.protocol.json import JsonDocument
+from spyne.util.wsgi_wrapper import WsgiMounter
 import time
 from lxml import etree
 from configobj import ConfigObj
- 
-app = Flask(__name__)
-spyne = Spyne(app)
+
 
 config = ConfigObj('config.ini')
 
@@ -17,16 +15,23 @@ config = ConfigObj('config.ini')
 def returnxml(responseXML):
     return responseXML
 
-@app.route("/api/xml")
-def receivexml():
-    #get the xml from the request
-    reqXML = request.args.get('requestxml', '')
-    print "request",request.data
-    print "first hello"
-    session_manager.queue_session({'reqXML':request,'callback':returnxml})
+class ExternalRequestService(ServiceBase):
+    @srpc(Unicode,  _returns=Unicode)
+    # here we receive the incoming xml requests and queue them
+    #curl -s http://localhost:8000/xml -d '{"receivexml":{"reqXML":"my xml string"}}
+    def receivexml(reqXML):
+        session_manager.queue_session({'reqXML':reqXML,'callback':returnxml})
+        return reqXML
 
+class httpRequestService(ServiceBase):
+    @srpc(Unicode,  _returns=Unicode)
+    # here we receive the incoming xml requests and queue them
+    #curl -s "http://localhost:8000/a/receivexml" -d "reqXML=this"
+    def receivexml(reqXML):
+        session_manager.queue_session({'reqXML':reqXML,'callback':returnxml})
+        return reqXML
 
-
+    
 class qbwcSessionManager():
     def __init__(self, sessionQueue = []):
         # this is a first in last out queue, i.e. a stack
@@ -63,13 +68,9 @@ class qbwcSessionManager():
             app.logger.debug("tickets do not match. There is trouble somewhere")
             return ""
 
-class QBWCService(spyne.Service):
-    __target_namespace__ =  'http://developer.intuit.com/'
-    __service_url_path__ = '/qwc'
-    __in_protocol__ = Soap11(validator='lxml')
-    __out_protocol__ = Soap11()
+class QBWCService(ServiceBase):
     
-    @spyne.srpc(Unicode, Unicode, _returns=Array(Unicode))
+    @srpc(Unicode, Unicode, _returns=Array(Unicode))
     def authenticate( strUserName, strPassword):
 
         """Authenticate the web connector to access this service.
@@ -94,7 +95,7 @@ class QBWCService(spyne.Service):
         app.logger.debug('authenticate %s',returnArray)
         return returnArray
 
-    @spyne.srpc(Unicode,  _returns=Unicode)
+    @srpc(Unicode,  _returns=Unicode)
     def clientVersion( strVersion ):
         """ sends Web connector version to this service
         @param strVersion version of GB web connector
@@ -103,7 +104,7 @@ class QBWCService(spyne.Service):
         app.logger.debug('clientVersion %s',strVersion)
         return ""
 
-    @spyne.srpc(Unicode,  _returns=Unicode)
+    @srpc(Unicode,  _returns=Unicode)
     def closeConnection( ticket ):
         """ used by web connector to indicate it is finished with update session
         @param ticket session token sent from this service to web connector
@@ -112,7 +113,7 @@ class QBWCService(spyne.Service):
         app.logger.debug('closeConnection %s',ticket)
         return "OK"
 
-    @spyne.srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
+    @srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
     def connectionError( ticket, hresult, message ):
         """ used by web connector to report errors connecting to Quickbooks
         @param ticket session token sent from this service to web connector
@@ -123,7 +124,7 @@ class QBWCService(spyne.Service):
         app.logger.debug('connectionError %s %s %s', ticket, hresult, message)
         return "done"
 
-    @spyne.srpc(Unicode,  _returns=Unicode)
+    @srpc(Unicode,  _returns=Unicode)
     def getLastError( ticket ):
         """  Web connector error message
         @param ticket session token sent from this service to web connector
@@ -133,7 +134,7 @@ class QBWCService(spyne.Service):
         return "Error message here!"
 
 
-    @spyne.srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
+    @srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
     def sendRequestXML( ticket, strHCPResponse, strCompanyFileName, qbXMLCountry, qbXMLMajorVers, qbXMLMinorVers ):
         """ send request via web connector to Quickbooks
         @param ticket session token sent from this service to web connector
@@ -148,7 +149,7 @@ class QBWCService(spyne.Service):
         app.logger.debug('sendRequestXML %s %s',strHCPResponse,reqXML)
         return reqXML
 
-    @spyne.srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
+    @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
     def receiveResponseXML( ticket, response, hresult, message ):
         """ contains data requested from Quickbooks
         @param ticket session token sent from this service to web connector
@@ -166,11 +167,34 @@ class QBWCService(spyne.Service):
     
 
 session_manager = qbwcSessionManager()
+#    tns='pyqbwc.app',
 
+externalrequestapp = Application([ExternalRequestService],
+    tns='a',
+    in_protocol=JsonDocument(),
+    out_protocol=JsonDocument()
+)
 
+qwcapp = Application([QBWCService],
+    tns='http://developer.intuit.com/',
+    in_protocol=Soap11(validator='lxml'),
+    out_protocol=Soap11()
+)
 
-
+httpRQapp = Application([httpRequestService],
+    tns='spyne.examples.hello',
+    in_protocol=HttpRpc(validator='soft'),
+    out_protocol=JsonDocument()
+)
 
 if __name__ == '__main__':
-    app.run(port=8000, debug=False)
+# You can use any Wsgi server. Here, we chose
+# Python's built-in wsgi server but you're not
+# supposed to use it in production.
+    from wsgiref.simple_server import make_server
+
+    wsgi_app = WsgiMounter({'xml':externalrequestapp,'qwc':qwcapp,'a':httpRQapp})
+    #wsgi_app = WsgiApplication([('/api/xml',externalrequestapp),('/qwc',qwcapp)])
+    server = make_server('0.0.0.0', 8000, wsgi_app)
+    server.serve_forever()
 
