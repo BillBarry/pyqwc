@@ -1,17 +1,30 @@
-import requests
+import walrus
+import uuid
+from lxml import etree
+from configobj import ConfigObj
+import walrus
+import tests.qbxml as qbxml
+import time
 
-requestxml = """<?xml version="1.0" encoding="utf-8"?>
-<?qbxml version="8.0"?>
-<QBXML>
-  <QBXMLMsgsRq onError="stopOnError">
-    <InvoiceQueryRq>
-      <MaxReturned>"2"</MaxReturned>
-      <IncludeLineItems>true</IncludeLineItems>
-    </InvoiceQueryRq>   
-  </QBXMLMsgsRq>
-</QBXML>
-"""
+# put some xml on the redis queue
+db = walrus.Walrus(host='localhost', port=6379, db=0)
+waitingWork = db.List('waitingWork')
+ticket =  str(uuid.uuid1())
+waitingWork.append(ticket)
+reqXML = qbxml.iterative_query_request(requestID=1,iteratorID="",querytype="Invoice")
+wwh = db.Hash(ticket)
+wwh['reqXML'] = reqXML
 
-payload = {"requestxml":requestxml}
-r = requests.get('http://localhost:8000/api/xml',params=payload)
-print r
+responsekey = 'response:'+ticket
+responselist = db.List(responsekey)
+while True:
+    if len(responselist):
+        data = responselist.pop()
+        print data
+        if data == "TheEnd":
+            print "The End"
+            responselist.clear()
+            break
+    else:
+        time.sleep(1)
+        

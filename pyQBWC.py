@@ -1,78 +1,24 @@
 import uuid
-from spyne import Application, srpc, ServiceBase, Array, Integer, Unicode, Iterable, ComplexModel
+import walrus
+from spyne.application import Application
+from spyne.service import ServiceBase
+from spyne.model.primitive import Integer, Unicode
+from spyne.model.complex import Iterable, ComplexModel, Array
+from spyne.decorator import srpc
 from spyne.protocol.soap import Soap11
-from spyne.protocol.http import HttpRpc
-from spyne.protocol.json import JsonDocument
-from spyne.util.wsgi_wrapper import WsgiMounter
 import time
 from lxml import etree
 from configobj import ConfigObj
+from spyne.server.wsgi import WsgiApplication
 
+import logging
+logging.basicConfig(level=logging.INFO)
 
 config = ConfigObj('config.ini')
 
-
-def returnxml(responseXML):
-    return responseXML
-
-class ExternalRequestService(ServiceBase):
-    @srpc(Unicode,  _returns=Unicode)
-    # here we receive the incoming xml requests and queue them
-    #curl -s http://localhost:8000/xml -d '{"receivexml":{"reqXML":"my xml string"}}
-    def receivexml(reqXML):
-        session_manager.queue_session({'reqXML':reqXML,'callback':returnxml})
-        return reqXML
-
-class httpRequestService(ServiceBase):
-    @srpc(Unicode,  _returns=Unicode)
-    # here we receive the incoming xml requests and queue them
-    #curl -s "http://localhost:8000/a/receivexml" -d "reqXML=this"
-    def receivexml(reqXML):
-        session_manager.queue_session({'reqXML':reqXML,'callback':returnxml})
-        return reqXML
-
-    
-class qbwcSessionManager():
-    def __init__(self, sessionQueue = []):
-        # this is a first in last out queue, i.e. a stack
-        self.sessionQueue = sessionQueue  
-
-    def queue_session(self,msg):
-        if 'ticket' not in msg or not msg['ticket']:
-            ticket =  str(uuid.uuid1())
-        else:
-            ticket = msg['ticket']
-        self.sessionQueue.append({"ticket":ticket,"reqXML":msg['reqXML'],"callback":msg["callback"]})
-    
-    def get_session(self):
-        if self.sessionQueue:
-            return self.sessionQueue[0]
-        else:
-            return ""
-        
-    def send_request(self,ticket):
-        if self.sessionQueue:
-            if ticket == self.sessionQueue[0]['ticket']:
-                ret = self.sessionQueue[0]['reqXML']
-                return ret
-            else:
-                print "tickets do not match. There is trouble somewhere"
-                return ""
-        
-    def return_response(self,ticket, response):
-        if ticket == self.sessionQueue[0]['ticket']:
-            callback = self.sessionQueue[0]['callback']
-            self.sessionQueue.pop(0)
-            callback(ticket,response)
-        else:
-            app.logger.debug("tickets do not match. There is trouble somewhere")
-            return ""
-
 class QBWCService(ServiceBase):
-    
-    @srpc(Unicode, Unicode, _returns=Array(Unicode))
-    def authenticate( strUserName, strPassword):
-
+    @srpc(Unicode,Unicode,_returns=Array(Unicode))
+    def authenticate(strUserName,strPassword):
         """Authenticate the web connector to access this service.
         @param strUserName user name to use for authentication
         @param strPassword password to use for authentication
@@ -82,9 +28,9 @@ class QBWCService(ServiceBase):
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['qwc']['username'] and strPassword == config['qwc']['password']:
             print "authenticated",time.ctime()
-            session = session_manager.get_session()
-            if 'ticket' in session:
-                returnArray.append(session['ticket'])
+            ticket = session_manager.get_ticket()
+            if ticket:
+                returnArray.append(ticket)
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
             else:
                 returnArray.append("none") # don't return a ticket if there are no requests
@@ -92,7 +38,7 @@ class QBWCService(ServiceBase):
         else:
             returnArray.append("no ticket") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
-        app.logger.debug('authenticate %s',returnArray)
+        print('authenticate %s',returnArray)
         return returnArray
 
     @srpc(Unicode,  _returns=Unicode)
@@ -110,7 +56,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        app.logger.debug('closeConnection %s',ticket)
+        print('closeConnection %s',ticket)
         return "OK"
 
     @srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
@@ -121,7 +67,7 @@ class QBWCService(ServiceBase):
         @param message error message
         @return string done indicating web service is finished.
         """
-        app.logger.debug('connectionError %s %s %s', ticket, hresult, message)
+        print('connectionError %s %s %s', ticket, hresult, message)
         return "done"
 
     @srpc(Unicode,  _returns=Unicode)
@@ -130,7 +76,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        app.logger.debug('lasterror %s',ticket)
+        print('lasterror %s',ticket)
         return "Error message here!"
 
 
@@ -145,8 +91,8 @@ class QBWCService(ServiceBase):
         @param qbXMLMinorVers Minor version number of the request processor qbXML 
         @return string containing the request if there is one or a NoOp
         """
-        reqXML = session_manager.send_request(ticket)
-        app.logger.debug('sendRequestXML %s %s',strHCPResponse,reqXML)
+        reqXML = session_manager.get_requestXML(ticket)
+        print('sendRequestXML %s %s',strHCPResponse,reqXML)
         return reqXML
 
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -159,42 +105,110 @@ class QBWCService(ServiceBase):
         @return string integer returned 100 means done anything less means there is more to come.
               where can we best get that information?
         """
-        app.logger.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
-        session_manager.return_response(ticket,response)
-
+        print('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
+        #store the returned data on redis
+        #check to see if it is an iterative command and if it is done, if not, put another request on redis iterativeWork
+        
+        #session_manager.store_response(ticket,response)
+        percent_done = session_manager.process_response(ticket,response)
         #need to make this return be 100 if we are really done.
-        return 10
-    
+        return percent_done
 
-session_manager = qbwcSessionManager()
-#    tns='pyqbwc.app',
 
-externalrequestapp = Application([ExternalRequestService],
-    tns='a',
-    in_protocol=JsonDocument(),
-    out_protocol=JsonDocument()
-)
+class qbwcSessionManager():
+    def __init__(self):
+        # this is a first in last out queue, i.e. a stack
+        self.db = walrus.Walrus(host='localhost', port=6379, db=0)
+        self.iterativeWork = self.db.Hash('iterativeWork')
+        self.waitingWork = self.db.List('waitingWork')
 
-qwcapp = Application([QBWCService],
+    def get_ticket(self):
+        if self.waitingWork:
+            ticket = self.waitingWork[0]
+            print 'ticket',ticket
+            return ticket
+        else:
+            return ""
+        
+    def is_iterative(self,reqXML):
+        root = etree.fromstring(str(reqXML))
+        isIterator = root.xpath('boolean(//@iterator)')
+        return isIterator
+
+    def process_response(self,ticket,response):
+        # first store it
+        responsekey = 'response:'+str(ticket)
+        self.responseStore = self.db.List(responsekey)
+        self.responseStore.append(response)        
+        #check if it is iterative
+        root = etree.fromstring(str(response))
+        isIterator = root.xpath('boolean(//@iterator)')
+        if isIterator:
+            nticket = self.iterativeWork['ticket']
+            if nticket != ticket:
+                print "real problem here, abort?"
+            reqXML = self.iterativeWork['reqXML']
+            reqroot = etree.fromstring(str(reqXML))
+
+            iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
+            print 'iteratorRemainingCount',iteratorRemainingCount
+            if iteratorRemainingCount:
+                # update the iterativeWork hash reqXML
+                iteratornode =  reqroot.xpath('//*[@iterator]')
+                #iteratornode =  reqroot.xpath('//@iterator')
+                print 'iteratornode',iteratornode
+                iteratornode[0].set('iterator', 'Continue')
+                requestID = int(reqroot.xpath('//@requestID')[0])
+                print 'requestID',requestID
+                iteratornode[0].set('requestID', str(requestID+1))
+                ntree = etree.ElementTree(reqroot)
+                requestxml = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')
+                self.iterativeWork['reqXML'] = requestxml
+                return 50
+            else:
+                # clear the iterativeWork hash
+                #self.iterativeWork['reqXML'] = ""
+                #self.iterativeWork['ticket'] = ""
+                self.iterativeWork.clear()
+                # create a finish response
+                self.responseStore.append("TheEnd")        
+
+                return 100 #100 percent done
+               
+            
+    def get_requestXML(self,ticket):
+        if self.iterativeWork['reqXML']:
+            reqXML = self.iterativeWork['reqXML']
+            nticket = self.iterativeWork['ticket']
+            if nticket != ticket:
+                print "error ticket mismatch"
+        elif self.waitingWork:
+            nticket = self.waitingWork.pop()
+            print 'waitingWork list',self.waitingWork
+            wwh = self.db.Hash(nticket)
+            reqXML = wwh['reqXML']
+            wwh.clear()
+            if self.is_iterative(reqXML):
+                # save it to iterativeWork hash
+                self.iterativeWork['reqXML'] = reqXML
+                self.iterativeWork['ticket'] = nticket
+        else:
+            reqXML = ""
+        return reqXML
+        
+
+
+app = Application([QBWCService],
     tns='http://developer.intuit.com/',
-    in_protocol=Soap11(validator='lxml'),
+    in_protocol=Soap11(validator='soft'),
     out_protocol=Soap11()
 )
-
-httpRQapp = Application([httpRequestService],
-    tns='spyne.examples.hello',
-    in_protocol=HttpRpc(validator='soft'),
-    out_protocol=JsonDocument()
-)
+session_manager = qbwcSessionManager()
 
 if __name__ == '__main__':
-# You can use any Wsgi server. Here, we chose
-# Python's built-in wsgi server but you're not
-# supposed to use it in production.
-    from wsgiref.simple_server import make_server
 
-    wsgi_app = WsgiMounter({'xml':externalrequestapp,'qwc':qwcapp,'a':httpRQapp})
-    #wsgi_app = WsgiApplication([('/api/xml',externalrequestapp),('/qwc',qwcapp)])
-    server = make_server('0.0.0.0', 8000, wsgi_app)
+    from wsgiref.simple_server import make_server
+    wsgi_app = WsgiApplication(app)
+    server = make_server('127.0.0.1', 8000, wsgi_app)
     server.serve_forever()
 

@@ -10,7 +10,7 @@ config = ConfigObj('config.ini')
 # that sits between our application and Quickbooks. It gets info from Quickbooks and sends it  to our SOAP server (and vice versa)
 
 def runSimulator():
-    url = 'http://127.0.0.1:8000/qwc?wsdl'
+    url = 'http://127.0.0.1:8000/?wsdl'
     print "simulator"
     client = SudsClient(url=url, cache=None)
     while True:
@@ -29,7 +29,7 @@ def runSimulator():
                 if iterator == 'Start':
                     iterator = 'Continue'
                     iteratorID  =  str(uuid.uuid1())
-                    iteratorRemainingCount=20
+                    iteratorRemainingCount=2
                 elif iterator == 'Continue':
                     
                     iteratorRemainingCount  -= 1
