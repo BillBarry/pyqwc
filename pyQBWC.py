@@ -106,10 +106,7 @@ class QBWCService(ServiceBase):
               where can we best get that information?
         """
         print('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
-        #store the returned data on redis
-        #check to see if it is an iterative command and if it is done, if not, put another request on redis iterativeWork
         
-        #session_manager.store_response(ticket,response)
         percent_done = session_manager.process_response(ticket,response)
         #need to make this return be 100 if we are really done.
         return percent_done
@@ -125,7 +122,6 @@ class qbwcSessionManager():
     def get_ticket(self):
         if self.waitingWork:
             ticket = self.waitingWork[0]
-            print 'ticket',ticket
             return ticket
         else:
             return ""
@@ -149,17 +145,12 @@ class qbwcSessionManager():
                 print "real problem here, abort?"
             reqXML = self.iterativeWork['reqXML']
             reqroot = etree.fromstring(str(reqXML))
-
             iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
-            print 'iteratorRemainingCount',iteratorRemainingCount
             if iteratorRemainingCount:
                 # update the iterativeWork hash reqXML
                 iteratornode =  reqroot.xpath('//*[@iterator]')
-                #iteratornode =  reqroot.xpath('//@iterator')
-                print 'iteratornode',iteratornode
                 iteratornode[0].set('iterator', 'Continue')
                 requestID = int(reqroot.xpath('//@requestID')[0])
-                print 'requestID',requestID
                 iteratornode[0].set('requestID', str(requestID+1))
                 ntree = etree.ElementTree(reqroot)
                 requestxml = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')
@@ -167,12 +158,9 @@ class qbwcSessionManager():
                 return 50
             else:
                 # clear the iterativeWork hash
-                #self.iterativeWork['reqXML'] = ""
-                #self.iterativeWork['ticket'] = ""
                 self.iterativeWork.clear()
                 # create a finish response
                 self.responseStore.append("TheEnd")        
-
                 return 100 #100 percent done
                
             

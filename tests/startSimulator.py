@@ -1,5 +1,4 @@
 import multiprocessing
-from flask import Flask
 import pyQBWC
 import qwcSimulator
 import time
