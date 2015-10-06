@@ -47,7 +47,7 @@ class QBWCService(ServiceBase):
         @param strVersion version of GB web connector
         @return what to do in case of Web connector updates itself
         """
-        app.logger.debug('clientVersion %s',strVersion)
+        #app.logger.debug('clientVersion %s',strVersion)
         return ""
 
     @srpc(Unicode,  _returns=Unicode)
@@ -56,7 +56,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        print('closeConnection %s',ticket)
+        #print('closeConnection %s',ticket)
         return "OK"
 
     @srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
@@ -67,7 +67,7 @@ class QBWCService(ServiceBase):
         @param message error message
         @return string done indicating web service is finished.
         """
-        print('connectionError %s %s %s', ticket, hresult, message)
+        #print('connectionError %s %s %s', ticket, hresult, message)
         return "done"
 
     @srpc(Unicode,  _returns=Unicode)
@@ -76,7 +76,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        print('lasterror %s',ticket)
+        #print('lasterror %s',ticket)
         return "Error message here!"
 
 
@@ -92,7 +92,7 @@ class QBWCService(ServiceBase):
         @return string containing the request if there is one or a NoOp
         """
         reqXML = session_manager.get_requestXML(ticket)
-        print('sendRequestXML %s %s',strHCPResponse,reqXML)
+        #print('sendRequestXML %s %s',strHCPResponse,reqXML)
         return reqXML
 
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -105,7 +105,7 @@ class QBWCService(ServiceBase):
         @return string integer returned 100 means done anything less means there is more to come.
               where can we best get that information?
         """
-        print('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
+        #print('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
         
         percent_done = session_manager.process_response(ticket,response)
         #need to make this return be 100 if we are really done.
@@ -138,25 +138,35 @@ class qbwcSessionManager():
         self.responseStore.append(response)        
         #check if it is iterative
         root = etree.fromstring(str(response))
-        isIterator = root.xpath('boolean(//@iterator)')
+        isIterator = root.xpath('boolean(//@iteratorRemainingCount)')
+        #iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
+        iteratorRemainingCount = root.xpath('string(//@iteratorRemainingCount)')
+        print "process response",isIterator,iteratorRemainingCount
         if isIterator:
             nticket = self.iterativeWork['ticket']
             if nticket != ticket:
-                print "real problem here, abort?"
+                print "real problem here, abort?",nticket,ticket
             reqXML = self.iterativeWork['reqXML']
             reqroot = etree.fromstring(str(reqXML))
             iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
+            iteratorID = root.xpath('string(//@iteratorID)')
+            print "iteratorremainingcount",iteratorRemainingCount,iteratorID
             if iteratorRemainingCount:
                 # update the iterativeWork hash reqXML
                 iteratornode =  reqroot.xpath('//*[@iterator]')
                 iteratornode[0].set('iterator', 'Continue')
                 requestID = int(reqroot.xpath('//@requestID')[0])
+                print 'requestID',requestID
                 iteratornode[0].set('requestID', str(requestID+1))
+                iteratornode[0].set('iteratorID', iteratorID)
                 ntree = etree.ElementTree(reqroot)
                 requestxml = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')
+                
                 self.iterativeWork['reqXML'] = requestxml
+                self.iterativeWork['ticket'] = ticket
                 return 50
             else:
+                print "no more iterative work"
                 # clear the iterativeWork hash
                 self.iterativeWork.clear()
                 # create a finish response
@@ -166,6 +176,7 @@ class qbwcSessionManager():
             
     def get_requestXML(self,ticket):
         if self.iterativeWork['reqXML']:
+            print "iterative work retrieve reqxml"
             reqXML = self.iterativeWork['reqXML']
             nticket = self.iterativeWork['ticket']
             if nticket != ticket:
