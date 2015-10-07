@@ -10,7 +10,7 @@ import time
 from lxml import etree
 from configobj import ConfigObj
 from spyne.server.wsgi import WsgiApplication
-
+from waitress import serve
 import logging
 logging.basicConfig(level=logging.INFO)
 
@@ -27,7 +27,6 @@ class QBWCService(ServiceBase):
         returnArray = []
         # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['qwc']['username'] and strPassword == config['qwc']['password']:
-            print "authenticated",time.ctime()
             ticket = session_manager.get_ticket()
             if ticket:
                 returnArray.append(ticket)
@@ -38,7 +37,7 @@ class QBWCService(ServiceBase):
         else:
             returnArray.append("no ticket") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
-        print('authenticate %s',returnArray)
+        logging.debug('authenticate %s',returnArray)
         return returnArray
 
     @srpc(Unicode,  _returns=Unicode)
@@ -47,7 +46,7 @@ class QBWCService(ServiceBase):
         @param strVersion version of GB web connector
         @return what to do in case of Web connector updates itself
         """
-        #app.logger.debug('clientVersion %s',strVersion)
+        logging.debug('clientVersion %s',strVersion)
         return ""
 
     @srpc(Unicode,  _returns=Unicode)
@@ -56,7 +55,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        #print('closeConnection %s',ticket)
+        logging.debug('closeConnection %s',ticket)
         return "OK"
 
     @srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
@@ -67,7 +66,7 @@ class QBWCService(ServiceBase):
         @param message error message
         @return string done indicating web service is finished.
         """
-        #print('connectionError %s %s %s', ticket, hresult, message)
+        logging.debug('connectionError %s %s %s', ticket, hresult, message)
         return "done"
 
     @srpc(Unicode,  _returns=Unicode)
@@ -76,7 +75,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        #print('lasterror %s',ticket)
+        logging.debug('lasterror %s',ticket)
         return "Error message here!"
 
 
@@ -92,7 +91,7 @@ class QBWCService(ServiceBase):
         @return string containing the request if there is one or a NoOp
         """
         reqXML = session_manager.get_requestXML(ticket)
-        #print('sendRequestXML %s %s',strHCPResponse,reqXML)
+        logging.debug('sendRequestXML %s %s',strHCPResponse,reqXML)
         return reqXML
 
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -105,10 +104,8 @@ class QBWCService(ServiceBase):
         @return string integer returned 100 means done anything less means there is more to come.
               where can we best get that information?
         """
-        #print('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)
-        
+        logging.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)        
         percent_done = session_manager.process_response(ticket,response)
-        #need to make this return be 100 if we are really done.
         return percent_done
 
 
@@ -128,7 +125,7 @@ class qbwcSessionManager():
         
     def is_iterative(self,reqXML):
         root = etree.fromstring(str(reqXML))
-        isIterator = root.xpath('boolean(//@iterator)')
+        isIterator = root.xpath('boolean(//@iteratorID)')
         return isIterator
 
     def process_response(self,ticket,response):
@@ -138,52 +135,47 @@ class qbwcSessionManager():
         self.responseStore.append(response)        
         #check if it is iterative
         root = etree.fromstring(str(response))
-        isIterator = root.xpath('boolean(//@iteratorRemainingCount)')
-        #iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
-        iteratorRemainingCount = root.xpath('string(//@iteratorRemainingCount)')
-        print "process response",isIterator,iteratorRemainingCount
+        #isIterator = root.xpath('boolean(//@iteratorRemainingCount)')
+        isIterator = root.xpath('boolean(//@iteratorID)')
         if isIterator:
             nticket = self.iterativeWork['ticket']
             if nticket != ticket:
-                print "real problem here, abort?",nticket,ticket
+                logging.error("real problem here, abort?")
             reqXML = self.iterativeWork['reqXML']
             reqroot = etree.fromstring(str(reqXML))
             iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
             iteratorID = root.xpath('string(//@iteratorID)')
-            print "iteratorremainingcount",iteratorRemainingCount,iteratorID
+            logging.info("iteratorRemainingCount %s",iteratorRemainingCount)
             if iteratorRemainingCount:
                 # update the iterativeWork hash reqXML
                 iteratornode =  reqroot.xpath('//*[@iterator]')
                 iteratornode[0].set('iterator', 'Continue')
                 requestID = int(reqroot.xpath('//@requestID')[0])
-                print 'requestID',requestID
                 iteratornode[0].set('requestID', str(requestID+1))
                 iteratornode[0].set('iteratorID', iteratorID)
                 ntree = etree.ElementTree(reqroot)
-                requestxml = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')
-                
+                requestxml = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')                
                 self.iterativeWork['reqXML'] = requestxml
                 self.iterativeWork['ticket'] = ticket
-                return 50
+                return 50  # is there any reason to return an accurate number here? something less than 100 is all that is needed.
             else:
-                print "no more iterative work"
                 # clear the iterativeWork hash
                 self.iterativeWork.clear()
                 # create a finish response
                 self.responseStore.append("TheEnd")        
                 return 100 #100 percent done
-               
-            
+        else:
+            self.responseStore.append("TheEnd")        
+            return 100 #100 percent done
+                            
     def get_requestXML(self,ticket):
         if self.iterativeWork['reqXML']:
-            print "iterative work retrieve reqxml"
             reqXML = self.iterativeWork['reqXML']
             nticket = self.iterativeWork['ticket']
             if nticket != ticket:
-                print "error ticket mismatch"
+                logging.error("error ticket mismatch")
         elif self.waitingWork:
             nticket = self.waitingWork.pop()
-            print 'waitingWork list',self.waitingWork
             wwh = self.db.Hash(nticket)
             reqXML = wwh['reqXML']
             wwh.clear()
@@ -204,10 +196,15 @@ app = Application([QBWCService],
 )
 session_manager = qbwcSessionManager()
 
-if __name__ == '__main__':
+def start_server():
+    serve(app, host=config['qwc']['host'], port=int(config['qwc']['port']))
 
+if __name__ == '__main__':
+    start_server()
+
+'''    
     from wsgiref.simple_server import make_server
     wsgi_app = WsgiApplication(app)
-    server = make_server('127.0.0.1', 8000, wsgi_app)
+    server = make_server(config['qwc']['host'], int(config['qwc']['port']), wsgi_app)
     server.serve_forever()
-
+'''
