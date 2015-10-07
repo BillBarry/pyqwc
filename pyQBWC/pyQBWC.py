@@ -12,7 +12,7 @@ from configobj import ConfigObj
 from spyne.server.wsgi import WsgiApplication
 from waitress import serve
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 config = ConfigObj('config.ini')
 
@@ -125,7 +125,7 @@ class qbwcSessionManager():
         
     def is_iterative(self,reqXML):
         root = etree.fromstring(str(reqXML))
-        isIterator = root.xpath('boolean(//@iteratorID)')
+        isIterator = root.xpath('boolean(//@iterator)')
         return isIterator
 
     def process_response(self,ticket,response):
@@ -135,12 +135,11 @@ class qbwcSessionManager():
         self.responseStore.append(response)        
         #check if it is iterative
         root = etree.fromstring(str(response))
-        #isIterator = root.xpath('boolean(//@iteratorRemainingCount)')
         isIterator = root.xpath('boolean(//@iteratorID)')
         if isIterator:
             nticket = self.iterativeWork['ticket']
             if nticket != ticket:
-                logging.error("real problem here, abort?")
+                logging.debug("real problem here, abort?",ticket,nticket)
             reqXML = self.iterativeWork['reqXML']
             reqroot = etree.fromstring(str(reqXML))
             iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
@@ -173,7 +172,7 @@ class qbwcSessionManager():
             reqXML = self.iterativeWork['reqXML']
             nticket = self.iterativeWork['ticket']
             if nticket != ticket:
-                logging.error("error ticket mismatch")
+                logging.info("error ticket mismatch")
         elif self.waitingWork:
             nticket = self.waitingWork.pop()
             wwh = self.db.Hash(nticket)
@@ -197,7 +196,8 @@ app = Application([QBWCService],
 session_manager = qbwcSessionManager()
 
 def start_server():
-    serve(app, host=config['qwc']['host'], port=int(config['qwc']['port']))
+    wsgi_app = WsgiApplication(app)
+    serve(wsgi_app, host=config['qwc']['host'], port=int(config['qwc']['port']))
 
 if __name__ == '__main__':
     start_server()
