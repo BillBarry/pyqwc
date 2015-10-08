@@ -12,9 +12,10 @@ from configobj import ConfigObj
 from spyne.server.wsgi import WsgiApplication
 from waitress import serve
 import logging
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 
 config = ConfigObj('config.ini')
+
 
 class QBWCService(ServiceBase):
     @srpc(Unicode,Unicode,_returns=Array(Unicode))
@@ -194,17 +195,13 @@ app = Application([QBWCService],
     out_protocol=Soap11()
 )
 session_manager = qbwcSessionManager()
-
+wsgi_app  = WsgiApplication(app)
+    
 def start_server():
-    wsgi_app = WsgiApplication(app)
+
     serve(wsgi_app, host=config['qwc']['host'], port=int(config['qwc']['port']))
 
 if __name__ == '__main__':
     start_server()
 
-'''    
-    from wsgiref.simple_server import make_server
-    wsgi_app = WsgiApplication(app)
-    server = make_server(config['qwc']['host'], int(config['qwc']['port']), wsgi_app)
-    server.serve_forever()
-'''
+
