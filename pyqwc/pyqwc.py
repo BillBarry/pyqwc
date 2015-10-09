@@ -16,6 +16,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 config = ConfigObj('config.ini')
 
+a;lksjf    clear the appropriate redis keys at startup
+also maybe switch to regular redis interface and create keys which timeout
 
 class QBWCService(ServiceBase):
     @srpc(Unicode,Unicode,_returns=Array(Unicode))
@@ -130,6 +132,9 @@ class qbwcSessionManager():
         return isIterator
 
     def process_response(self,ticket,response):
+
+        look for error responses here if you get an error, clear the redis keys and abort
+        you don't know what is happening so better to bail out than try and fix things
         # first store it
         responsekey = 'response:'+str(ticket)
         self.responseStore = self.db.List(responsekey)

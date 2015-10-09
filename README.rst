@@ -4,7 +4,7 @@ It is alpha software, beware.
 
 To access Quickbooks this module uses the  `Quickbooks Web Connector <https://developer.intuit.com/docs/quickbooks_web_connector>`_ . The design of the QuickBooks Web Connector (QWC)  determines the underlying structure of this module.
 
-The core of this is a soap server, called pyqwc. pyqwc takes requests from the user/client in XML, passes those off to QuicBooks via the QWC. It then takes the XML response from  QWC and passes them back to the user/client. This is a very asyncronous process because pyqwc does not directly contact the QWC, it instead has to wait for the QWC to contact it. To handle this asynchronous process, all messages are passed back and forth via Redis.  The request XML is placed in a specific Redis list and the response is passed back in another Redis list.
+The core of this is a soap server, called pyqwc. pyqwc takes requests from the user/client in XML, passes those off to QuickBooks via the QWC. It then takes the XML response from  QWC and passes them back to the user/client. This is a very asyncronous process because pyqwc does not directly contact the QWC, it instead has to wait for the QWC to contact it. To handle this asynchronous process, all messages are passed back and forth via Redis.  The request XML is placed in a specific Redis list and the response is passed back in another Redis list.
 
 That describes the base layer, a soap server that basically passes messages back and forth between Redis and the QWC.  Above that base layer you can build any type of client to generate the XML requests, put them in Redis and retrieve the responses back from Redis. There are examples of clients in the clients subdirectory.
 
