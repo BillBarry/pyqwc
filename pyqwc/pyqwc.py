@@ -217,7 +217,7 @@ app = Application([QBWCService],
     out_protocol=Soap11()
 )
 session_manager = qbwcSessionManager()
-wsgi_app  = WsgiApplication(app)
+application  = WsgiApplication(app)
 
     
 def start_server():

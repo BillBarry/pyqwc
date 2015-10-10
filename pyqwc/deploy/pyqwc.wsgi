@@ -1,1 +1,2 @@
-from pyqwc import wsgi_app as application
+from pyqwc import pyqwc
+application = pyqwc.application
