@@ -11,13 +11,23 @@ from lxml import etree
 from configobj import ConfigObj
 from spyne.server.wsgi import WsgiApplication
 from waitress import serve
+import os
 import logging
-logging.basicConfig(level=logging.DEBUG)
+import redis
 
-config = ConfigObj('config.ini')
+logging.basicConfig(level=logging.INFO)
+logging.addLevelName(8,"DEBUG2")
 
-a;lksjf    clear the appropriate redis keys at startup
-also maybe switch to regular redis interface and create keys which timeout
+configfile = os.environ['qwcconfig']
+config = ConfigObj(configfile)
+
+rdb = walrus.Database(
+    host=config['redis']['host'],
+    port=config['redis']['port'], 
+    password=config['redis']['password'],
+    db=config['redis']['db'])
+rdb.Hash('iterativeWork').clear()
+rdb.List('waitingWork').clear()
 
 class QBWCService(ServiceBase):
     @srpc(Unicode,Unicode,_returns=Array(Unicode))
@@ -28,7 +38,6 @@ class QBWCService(ServiceBase):
         @return the completed array
         """
         returnArray = []
-        # or maybe config should have a hash of usernames and salted hashed passwords
         if strUserName == config['qwc']['username'] and strPassword == config['qwc']['password']:
             ticket = session_manager.get_ticket()
             if ticket:
@@ -84,6 +93,7 @@ class QBWCService(ServiceBase):
 
     @srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
     def sendRequestXML( ticket, strHCPResponse, strCompanyFileName, qbXMLCountry, qbXMLMajorVers, qbXMLMinorVers ):
+        #?maybe we could hang here, wait for some xml and send it to qwc, that way shortening the wait
         """ send request via web connector to Quickbooks
         @param ticket session token sent from this service to web connector
         @param strHCPResponse qbXML response from QuickBooks
@@ -94,7 +104,8 @@ class QBWCService(ServiceBase):
         @return string containing the request if there is one or a NoOp
         """
         reqXML = session_manager.get_requestXML(ticket)
-        logging.debug('sendRequestXML %s %s',strHCPResponse,reqXML)
+        logging.debug('sendRequestXML %s ',strHCPResponse)
+        logging.debug2('sendRequestXML %s ',reqXML)
         return reqXML
 
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -107,17 +118,22 @@ class QBWCService(ServiceBase):
         @return string integer returned 100 means done anything less means there is more to come.
               where can we best get that information?
         """
-        logging.debug('receiveResponseXML %s %s %s %s',ticket,response,hresult,message)        
+        logging.debug('receiveResponseXML %s %s %s',ticket,hresult,message)
+        logging.debug2('receiveResponseXML %s',response)
         percent_done = session_manager.process_response(ticket,response)
         return percent_done
 
 
 class qbwcSessionManager():
     def __init__(self):
-        # this is a first in last out queue, i.e. a stack
-        self.db = walrus.Walrus(host='localhost', port=6379, db=0)
-        self.iterativeWork = self.db.Hash('iterativeWork')
-        self.waitingWork = self.db.List('waitingWork')
+        #requests are read from redis and responses are returned in redis
+        self.redisdb= walrus.Database(
+            host=config['redis']['host'],
+            port=config['redis']['port'], 
+            password=config['redis']['password'],
+            db=config['redis']['db'])
+        self.iterativeWork = self.redisdb.Hash('iterativeWork')
+        self.waitingWork = self.redisdb.List('waitingWork')
 
     def get_ticket(self):
         if self.waitingWork:
@@ -133,11 +149,11 @@ class qbwcSessionManager():
 
     def process_response(self,ticket,response):
 
-        look for error responses here if you get an error, clear the redis keys and abort
-        you don't know what is happening so better to bail out than try and fix things
+        #?look for error responses here if you get an error, clear the redis keys and abort
+        #?you don't know what is happening so better to bail out than try and fix things
         # first store it
         responsekey = 'response:'+str(ticket)
-        self.responseStore = self.db.List(responsekey)
+        self.responseStore = self.redisdb.List(responsekey)
         self.responseStore.append(response)        
         #check if it is iterative
         root = etree.fromstring(str(response))
@@ -181,7 +197,7 @@ class qbwcSessionManager():
                 logging.info("error ticket mismatch")
         elif self.waitingWork:
             nticket = self.waitingWork.pop()
-            wwh = self.db.Hash(nticket)
+            wwh = self.redisdb.Hash(nticket)
             reqXML = wwh['reqXML']
             wwh.clear()
             if self.is_iterative(reqXML):
@@ -201,9 +217,9 @@ app = Application([QBWCService],
 )
 session_manager = qbwcSessionManager()
 wsgi_app  = WsgiApplication(app)
+
     
 def start_server():
-
     serve(wsgi_app, host=config['qwc']['host'], port=int(config['qwc']['port']))
 
 if __name__ == '__main__':
