@@ -15,8 +15,9 @@ import os
 import logging
 import redis
 
-logging.basicConfig(level=logging.INFO)
-logging.addLevelName(8,"DEBUG2")
+logging.basicConfig(level=logging.WARNING)
+DEBUG2 = 8
+logging.addLevelName(DEBUG2,"DEBUG2")
 
 configfile = os.environ['qwcconfig']
 config = ConfigObj(configfile)
@@ -26,6 +27,7 @@ rdb = walrus.Database(
     port=config['redis']['port'], 
     password=config['redis']['password'],
     db=config['redis']['db'])
+#? need to clear the hashes pointed to by waiting work first
 rdb.Hash('iterativeWork').clear()
 rdb.List('waitingWork').clear()
 
@@ -106,7 +108,7 @@ class QBWCService(ServiceBase):
         """
         reqXML = session_manager.get_requestXML(ticket)
         logging.debug('sendRequestXML %s ',strHCPResponse)
-        logging.debug2('sendRequestXML %s ',reqXML)
+        logging.log(DEBUG2,'sendRequestXML %s ',reqXML)
         return reqXML
 
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -120,7 +122,7 @@ class QBWCService(ServiceBase):
               where can we best get that information?
         """
         logging.debug('receiveResponseXML %s %s %s',ticket,hresult,message)
-        logging.debug2('receiveResponseXML %s',response)
+        logging.log(DEBUG2,'receiveResponseXML %s',response)
         percent_done = session_manager.process_response(ticket,response)
         return percent_done
 
