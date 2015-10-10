@@ -15,15 +15,15 @@ In order for QuickBooks to use the QWC, you must install a qwc file. An example 
 Guidance provided by
 --------------------
 
-The QBWC `manual <https://developer-static.intuit.com/qbSDK-current/doc/PDF/QBWC_proguide.pdf>`_
+The QBWC `programmer's guide. <https://developer-static.intuit.com/qbSDK-current/doc/PDF/QBWC_proguide.pdf>`_
 
 ricardosasilva's `django-to-quickbooks-connector <https://github.com/ricardosasilva/django-to-quickbooks-connector/blob/master/mydjangoproject/qbwc/views.py>`_
 
-The spyne Hello World `example <http://spyne.io/docs/2.10/manual/02_helloworld.html>`_
+The spyne Hello World `example. <http://spyne.io/docs/2.10/manual/02_helloworld.html>`_
 
-Reference source for `QBooks SDK <https://developer-static.intuit.com/qbSDK-current/Common/newOSR/index.html>`_
+Reference source for `QBooks SDK. <https://developer-static.intuit.com/qbSDK-current/Common/newOSR/index.html>`_
 
-Nice explanation on how to `install the qwc file <http://www.nsoftware.com/kb/articles/qbwc.rst>`_
+Nice explanation on how to `install the qwc file. <http://www.nsoftware.com/kb/articles/qbwc.rst>`_
 
 A file config.ini is needed but not included in the distribution. Here is an example.
 
@@ -42,4 +42,10 @@ A file config.ini is needed but not included in the distribution. Here is an exa
    password = "gbwcpassword"
    [sqlite]
    dbfile = 'ourQB.db'
+   [redis]
+   host = '127.0.0.1'
+   port = 6379
+   password = ""
+   db = 0
+
 

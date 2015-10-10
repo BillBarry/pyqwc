@@ -78,6 +78,7 @@ class QBWCService(ServiceBase):
         @param message error message
         @return string done indicating web service is finished.
         """
+        # need to push this error to the client. Should there be a message channel on Redis for this?
         logging.debug('connectionError %s %s %s', ticket, hresult, message)
         return "done"
 
