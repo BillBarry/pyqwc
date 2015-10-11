@@ -157,7 +157,7 @@ class qbwcSessionManager():
         # first store it
         responsekey = 'response:'+str(ticket)
         self.responseStore = self.redisdb.List(responsekey)
-        self.responseStore.append(response)        
+        self.responseStore.append(response)
         #check if it is iterative
         root = etree.fromstring(str(response))
         isIterator = root.xpath('boolean(//@iteratorID)')
