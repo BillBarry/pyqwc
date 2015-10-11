@@ -91,7 +91,9 @@ class QBWCService(ServiceBase):
         @return string displayed to user indicating status of web service
         """
         logging.debug('lasterror %s',ticket)
-        return "Error message here!"
+        #return "Error message here!"
+        return "NoOp"
+
 
 
     @srpc(Unicode,Unicode,Unicode,Unicode,Integer,Integer,  _returns=Unicode)
@@ -107,8 +109,9 @@ class QBWCService(ServiceBase):
         @return string containing the request if there is one or a NoOp
         """
         reqXML = session_manager.get_requestXML(ticket)
-        logging.debug('sendRequestXML %s ',strHCPResponse)
-        logging.log(DEBUG2,'sendRequestXML %s ',reqXML)
+        logging.debug('sendRequestXML')
+        logging.log(DEBUG2,'sendRequestXML reqXML %s ',reqXML)
+        logging.log(DEBUG2,'sendRequestXML strHCPResponse %s ',strHCPResponse)
         return reqXML
 
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -223,7 +226,7 @@ application  = WsgiApplication(app)
 
     
 def start_server():
-    serve(wsgi_app, host=config['qwc']['host'], port=int(config['qwc']['port']))
+    serve(application, host=config['qwc']['host'], port=int(config['qwc']['port']))
 
 if __name__ == '__main__':
     start_server()

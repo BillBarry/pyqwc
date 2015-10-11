@@ -1,2 +1,2 @@
 import pyqwc
-serve()
+pyqwc.start_server()
