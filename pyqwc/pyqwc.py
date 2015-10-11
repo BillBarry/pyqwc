@@ -16,12 +16,22 @@ import logging
 import redis
 
 
-DEBUG2 = 8
-logging.addLevelName(DEBUG2,"DEBUG2")
-logging.basicConfig(level=logging.INFO)
-
 configfile = os.environ['qwcconfig']
 config = ConfigObj(configfile)
+
+DEBUG2 = 8
+LEVELS = {'DEBUG2': DEBUG2,
+          'DEBUG':logging.DEBUG,
+          'INFO':logging.INFO,
+          'WARNING':logging.WARNING,
+          'ERROR':logging.ERROR,
+          'CRITICAL':logging.CRITICAL,
+          }
+
+logging.addLevelName(DEBUG2,"DEBUG2")
+
+logging.basicConfig(level=LEVELS[config['qwc']['loglevel'].upper()])
+
 
 rdb = walrus.Database(
     host=config['redis']['host'],
