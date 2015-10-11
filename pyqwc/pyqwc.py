@@ -15,9 +15,10 @@ import os
 import logging
 import redis
 
-logging.basicConfig(level=logging.WARNING)
+
 DEBUG2 = 8
 logging.addLevelName(DEBUG2,"DEBUG2")
+logging.basicConfig(level=logging.INFO)
 
 configfile = os.environ['qwcconfig']
 config = ConfigObj(configfile)
