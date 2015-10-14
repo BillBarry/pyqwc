@@ -33,14 +33,14 @@ logging.addLevelName(DEBUG2,"DEBUG2")
 logging.basicConfig(level=LEVELS[config['qwc']['loglevel'].upper()])
 
 
-rdb = walrus.Database(
-    host=config['redis']['host'],
-    port=config['redis']['port'], 
-    password=config['redis']['password'],
-    db=config['redis']['db'])
+#rdb = walrus.Database(
+#    host=config['redis']['host'],
+#    port=config['redis']['port'], 
+#    password=config['redis']['password'],
+#    db=config['redis']['db'])
 #? need to clear the hashes pointed to by waiting work first
-rdb.Hash('iterativeWork').clear()
-rdb.List('waitingWork').clear()
+#rdb.Hash('iterativeWork').clear()
+#rdb.List('waitingWork').clear()
 
 class QBWCService(ServiceBase):
     @srpc(Unicode,Unicode,_returns=Array(Unicode))
@@ -172,13 +172,14 @@ class qbwcSessionManager():
         responsekey = 'response:'+str(ticket)
         self.responseStore = self.redisdb.List(responsekey)
         self.responseStore.append(response)
+        logging.debug("storing response %s",responsekey)
         #check if it is iterative
         root = etree.fromstring(str(response))
         isIterator = root.xpath('boolean(//@iteratorID)')
         if isIterator:
             nticket = self.iterativeWork['ticket']
             if nticket != ticket:
-                logging.debug("real problem here, abort?",ticket,nticket)
+                logging.debug("real problem here, abort? %s %s",ticket,nticket)
             reqXML = self.iterativeWork['reqXML']
             reqroot = etree.fromstring(str(reqXML))
             iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
