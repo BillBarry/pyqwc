@@ -52,7 +52,12 @@ class QBWCService(ServiceBase):
         """
         returnArray = []
         if strUserName == config['qwc']['username'] and strPassword == config['qwc']['password']:
-            ticket = session_manager.get_ticket()
+            if session_manager.inSession:
+                returnArray.append("none")
+                returnArray.append("busy")
+                logging.debug('trying to authenticate during an open session')
+            else:    
+                ticket = session_manager.checkJobQueue()
             if ticket:
                 returnArray.append(ticket)
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
@@ -60,7 +65,7 @@ class QBWCService(ServiceBase):
                 returnArray.append("none") # don't return a ticket if there are no requests
                 returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
-            returnArray.append("no ticket") # don't return a ticket if username password does not authenticate
+            returnArray.append("none") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
         logging.debug('authenticate %s',returnArray)
         return returnArray
