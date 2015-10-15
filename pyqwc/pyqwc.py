@@ -39,8 +39,9 @@ logging.basicConfig(level=LEVELS[config['qwc']['loglevel'].upper()])
 #    password=config['redis']['password'],
 #    db=config['redis']['db'])
 #? need to clear the hashes pointed to by waiting work first
-#rdb.Hash('iterativeWork').clear()
-#rdb.List('waitingWork').clear()
+#rdb.Hash('qwc:currentWork').clear()
+#rdb.List('qwc:waitingWork').clear()
+#rdb.set('qwc:sessionTicket','')
 
 class QBWCService(ServiceBase):
     @srpc(Unicode,Unicode,_returns=Array(Unicode))
@@ -56,10 +57,9 @@ class QBWCService(ServiceBase):
                 returnArray.append("none")
                 returnArray.append("busy")
                 logging.debug('trying to authenticate during an open session')
-            else:    
-                ticket = session_manager.checkJobQueue()
-            if ticket:
-                returnArray.append(ticket)
+            elif session_manager.newJobs()
+                sessionticket = self.setTicket()
+                returnArray.append(sessionticket)
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
             else:
                 returnArray.append("none") # don't return a ticket if there are no requests
@@ -85,6 +85,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
+        session_manager.clearTicket()
         logging.debug('closeConnection %s',ticket)
         return "OK"
 
@@ -154,16 +155,24 @@ class qbwcSessionManager():
             port=config['redis']['port'], 
             password=config['redis']['password'],
             db=config['redis']['db'])
-        self.iterativeWork = self.redisdb.Hash('iterativeWork')
-        self.waitingWork = self.redisdb.List('waitingWork')
+        self.currentWork = self.redisdb.Hash('qwc:currentWork')
+        self.waitingWork = self.redisdb.List('qwc:waitingWork')
+        self.sessionKey = 'qwc:sessionTicket'
 
-    def get_ticket(self):
-        if self.waitingWork:
-            ticket = self.waitingWork[0]
-            return ticket
-        else:
-            return ""
-        
+    def setTicket():
+        sessionTicket = str(uuid.uuid1())
+        self.redisdb.set(self.sessionKey,sessionTicket)
+        return sessionTicket
+    
+    def clearTicket():
+        sessionTicket = ""
+        self.redisdb.set(self.sessionKey,sessionTicket)
+        return sessionTicket
+    
+    def getTicket():
+        return self.redisdb.get(self.sessionKey)
+                         
+                        
     def is_iterative(self,reqXML):
         root = etree.fromstring(str(reqXML))
         isIterator = root.xpath('boolean(//@iterator)')
@@ -174,7 +183,8 @@ class qbwcSessionManager():
         #?look for error responses here if you get an error, clear the redis keys and abort
         #?you don't know what is happening so better to bail out than try and fix things
         # first store it
-        responsekey = 'response:'+str(ticket)
+        reqID =  self.currentWork['reqID']
+        responsekey = 'qwc:response:'+reqID
         self.responseStore = self.redisdb.List(responsekey)
         self.responseStore.append(response)
         logging.debug("storing response %s",responsekey)
@@ -182,10 +192,7 @@ class qbwcSessionManager():
         root = etree.fromstring(str(response))
         isIterator = root.xpath('boolean(//@iteratorID)')
         if isIterator:
-            nticket = self.iterativeWork['ticket']
-            if nticket != ticket:
-                logging.debug("real problem here, abort? %s %s",ticket,nticket)
-            reqXML = self.iterativeWork['reqXML']
+            reqXML = self.currentWork['reqXML']
             reqroot = etree.fromstring(str(reqXML))
             iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
             iteratorID = root.xpath('string(//@iteratorID)')
@@ -198,39 +205,43 @@ class qbwcSessionManager():
                 iteratornode[0].set('requestID', str(requestID+1))
                 iteratornode[0].set('iteratorID', iteratorID)
                 ntree = etree.ElementTree(reqroot)
-                requestxml = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')                
-                self.iterativeWork['reqXML'] = requestxml
-                self.iterativeWork['ticket'] = ticket
+                nextreqXML = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')                
+                self.currentWork['reqXML'] = nextreqXML
                 return 50  # is there any reason to return an accurate number here? something less than 100 is all that is needed.
             else:
-                # clear the iterativeWork hash
-                self.iterativeWork.clear()
+                # clear the currentWork hash
+                self.currentWork.clear()
                 # create a finish response
                 self.responseStore.append("TheEnd")        
                 return 100 #100 percent done
         else:
             self.responseStore.append("TheEnd")        
             return 100 #100 percent done
-                            
-    def get_requestXML(self,ticket):
-        if self.iterativeWork['reqXML']:
-            reqXML = self.iterativeWork['reqXML']
-            nticket = self.iterativeWork['ticket']
-            if nticket != ticket:
-                logging.info("error ticket mismatch")
-        elif self.waitingWork:
-            nticket = self.waitingWork.pop()
-            wwh = self.redisdb.Hash(nticket)
+
+    def inSession(self):
+        return self.sessionTicket
+
+    def closeSession(self):
+        self.sessionTicket = ""
+
+
+    def newJobs(self):
+        if self.inSession:
+            logging.debug('checking queue when you already have a job')
+        elif len(self.waitingWork):
+            reqID = self.waitingWork.pop()
+            wwh = self.redisdb.Hash(reqID)
             reqXML = wwh['reqXML']
-            wwh.clear()
-            if self.is_iterative(reqXML):
-                # save it to iterativeWork hash
-                self.iterativeWork['reqXML'] = reqXML
-                self.iterativeWork['ticket'] = nticket
-        else:
-            reqXML = ""
-        return reqXML
+            self.currentWork['reqXML'] = reqXML
+            self.currentWork['reqID'] = reqID
+            return True
+        return False
+                                     
+    def get_reqXML(self,ticket):
+        return  self.currentWork['reqXML']
         
+    def get_reqID(self,ticket):
+        return  self.currentWork['reqID']
 
 
 app = Application([QBWCService],
