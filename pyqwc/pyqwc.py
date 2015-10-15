@@ -53,12 +53,12 @@ class QBWCService(ServiceBase):
         """
         returnArray = []
         if strUserName == config['qwc']['username'] and strPassword == config['qwc']['password']:
-            if session_manager.inSession:
+            if session_manager.inSession():
                 returnArray.append("none")
                 returnArray.append("busy")
                 logging.debug('trying to authenticate during an open session')
-            elif session_manager.newJobs()
-                sessionticket = self.setTicket()
+            elif session_manager.newJobs():
+                sessionticket = session_manager.setTicket()
                 returnArray.append(sessionticket)
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
             else:
@@ -85,7 +85,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        session_manager.clearTicket()
+        session_manager.closeSession()
         logging.debug('closeConnection %s',ticket)
         return "OK"
 
@@ -125,7 +125,7 @@ class QBWCService(ServiceBase):
         @param qbXMLMinorVers Minor version number of the request processor qbXML 
         @return string containing the request if there is one or a NoOp
         """
-        reqXML = session_manager.get_requestXML(ticket)
+        reqXML = session_manager.get_reqXML(ticket)
         logging.debug('sendRequestXML')
         logging.log(DEBUG2,'sendRequestXML reqXML %s ',reqXML)
         logging.log(DEBUG2,'sendRequestXML strHCPResponse %s ',strHCPResponse)
@@ -159,20 +159,27 @@ class qbwcSessionManager():
         self.waitingWork = self.redisdb.List('qwc:waitingWork')
         self.sessionKey = 'qwc:sessionTicket'
 
-    def setTicket():
+    def setTicket(self):
         sessionTicket = str(uuid.uuid1())
         self.redisdb.set(self.sessionKey,sessionTicket)
         return sessionTicket
     
-    def clearTicket():
+    def clearTicket(self):
         sessionTicket = ""
         self.redisdb.set(self.sessionKey,sessionTicket)
         return sessionTicket
     
-    def getTicket():
+    def getTicket(self):
         return self.redisdb.get(self.sessionKey)
                          
-                        
+    def inSession(self):
+        return self.getTicket()
+
+    def closeSession(self):
+        self.clearTicket()
+
+
+    
     def is_iterative(self,reqXML):
         root = etree.fromstring(str(reqXML))
         isIterator = root.xpath('boolean(//@iterator)')
@@ -212,30 +219,27 @@ class qbwcSessionManager():
                 # clear the currentWork hash
                 self.currentWork.clear()
                 # create a finish response
-                self.responseStore.append("TheEnd")        
-                return 100 #100 percent done
+                self.responseStore.append("TheEnd")
+                if self.newJobs():
+                    return 50
+                else:
+                    return 100 #100 percent done
         else:
             self.responseStore.append("TheEnd")        
             return 100 #100 percent done
 
-    def inSession(self):
-        return self.sessionTicket
-
-    def closeSession(self):
-        self.sessionTicket = ""
-
 
     def newJobs(self):
-        if self.inSession:
-            logging.debug('checking queue when you already have a job')
-        elif len(self.waitingWork):
+        if len(self.waitingWork):
             reqID = self.waitingWork.pop()
             wwh = self.redisdb.Hash(reqID)
             reqXML = wwh['reqXML']
             self.currentWork['reqXML'] = reqXML
             self.currentWork['reqID'] = reqID
+            wwh.clear()
             return True
-        return False
+        else:
+            return False
                                      
     def get_reqXML(self,ticket):
         return  self.currentWork['reqXML']
