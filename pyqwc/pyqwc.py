@@ -16,7 +16,7 @@ import logging
 import redis
 
 
-configfile = os.environ['qwcconfig']
+configfile = os.environ['QWC_CONFIG_FILE']
 config = ConfigObj(configfile)
 
 DEBUG2 = 8
