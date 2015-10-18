@@ -177,8 +177,6 @@ class qbwcSessionManager():
 
     def closeSession(self):
         self.clearTicket()
-
-
     
     def is_iterative(self,reqXML):
         root = etree.fromstring(str(reqXML))
@@ -186,7 +184,6 @@ class qbwcSessionManager():
         return isIterator
 
     def process_response(self,ticket,response):
-
         #?look for error responses here if you get an error, clear the redis keys and abort
         #?you don't know what is happening so better to bail out than try and fix things
         # first store it
@@ -194,6 +191,7 @@ class qbwcSessionManager():
         responsekey = 'qwc:response:'+reqID
         self.responseStore = self.redisdb.List(responsekey)
         self.responseStore.append(response)
+        self.redisdb.publish(responsekey,"data")
         logging.debug("storing response %s",responsekey)
         #check if it is iterative
         root = etree.fromstring(str(response))
@@ -219,13 +217,15 @@ class qbwcSessionManager():
                 # clear the currentWork hash
                 self.currentWork.clear()
                 # create a finish response
-                self.responseStore.append("TheEnd")
+                self.redisdb.publish(responsekey,"end")
+                #self.responseStore.append("TheEnd")
                 if self.newJobs():
                     return 50
                 else:
                     return 100 #100 percent done
         else:
-            self.responseStore.append("TheEnd")        
+            self.redisdb.publish(responsekey,"end")
+            #self.responseStore.append("TheEnd")        
             return 100 #100 percent done
 
 
