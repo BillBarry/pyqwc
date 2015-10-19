@@ -191,7 +191,7 @@ class qbwcSessionManager():
         responsekey = 'qwc:response:'+reqID
         self.responseStore = self.redisdb.List(responsekey)
         self.responseStore.append(response)
-        self.redisdb.publish(responsekey,"data")
+        #self.redisdb.publish(responsekey,"data")
         logging.debug("storing response %s",responsekey)
         #check if it is iterative
         root = etree.fromstring(str(response))
@@ -217,8 +217,8 @@ class qbwcSessionManager():
                 # clear the currentWork hash
                 self.currentWork.clear()
                 # create a finish response
-                self.redisdb.publish(responsekey,"end")
-                #self.responseStore.append("TheEnd")
+                self.responseStore.append("TheEnd")
+                #self.redisdb.publish(responsekey,"end")
                 if self.newJobs():
                     return 50
                 else:
@@ -242,8 +242,21 @@ class qbwcSessionManager():
             return False
                                      
     def get_reqXML(self,ticket):
-        return  self.currentWork['reqXML']
-        
+        if self.currentWork['reqXML']:
+            return  self.currentWork['reqXML']
+        else:
+            reqID = self.blpop('qwc:waitingWork',timeout=50)
+            if reqID:
+                wwh = self.redisdb.Hash(reqID)
+                reqXML = wwh['reqXML']
+                self.currentWork['reqXML'] = reqXML
+                self.currentWork['reqID'] = reqID
+                wwh.clear()
+                return reqXML
+            else:
+                return ""
+
+                    
     def get_reqID(self,ticket):
         return  self.currentWork['reqID']
 

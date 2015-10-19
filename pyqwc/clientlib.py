@@ -24,16 +24,14 @@ class pyqwcClient():
         wwh['reqXML'] = reqXML
 
     def processResponse(self,processdata,optparam=""):
-        pubsub = self.redisdb.pubsub()
-        pubsub.subscribe([self.responsekey])
-        for item in pubsub.listen():
-            if item['data'] == "end":
-                pubsub.unsubscribe()
+        TheEnd = False
+        while not TheEnd:
+            data = blpop(self.responselist,timeout=120)
+            if data == "TheEnd":
+                TheEnd = True
+                print querytype,"TheEnd"
                 self.responselist.clear()
-                print "unsubscribed and finished"
-                break
-            elif item['data'] == "data":
-                data = self.responselist.pop()
+            else:
                 if optparam:
                     processdata(data,optparam)
                 else:

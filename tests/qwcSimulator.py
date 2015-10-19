@@ -3,14 +3,19 @@ import time
 from lxml import etree
 from configobj import ConfigObj
 import uuid
-import qbxml
+import os
 
-config = ConfigObj('config.ini')
+configfile = os.environ['QWC_CONFIG_FILE']
+config = ConfigObj(configfile)
+
 #  this barely simulates the Quickbooks web connector for testing purposes. the qwc is basically a SOAP client
 # that sits between our application and Quickbooks. It gets info from Quickbooks and sends it  to our SOAP server (and vice versa)
 
 def runSimulator():
-    url = 'http://127.0.0.1:8000/?wsdl'
+    host=config['qwc']['host']
+    port=config['qwc']['port']
+    #url = 'http://127.0.0.1:4241/?wsdl'
+    url =  "http://"+host + ":"+str(port)+"/?wsdl"
     print "simulator"
     client = SudsClient(url=url, cache=None)
     while True:
@@ -33,7 +38,7 @@ def runSimulator():
                 elif iterator == 'Continue':
                     
                     iteratorRemainingCount  -= 1
-                responsexml = qbxml.make_fake_invoice(requestID,iteratorID,iteratorRemainingCount,iterator)
+                responsexml = make_fake_invoice(requestID,iteratorID,iteratorRemainingCount,iterator)
                 percentRemaining = client.service.receiveResponseXML( ticket = ticket,response=responsexml,hresult ="",message="")
                 time.sleep(5)
                 reqXML = client.service.sendRequestXML(ticket,strHCPResponse="",strCompanyFileName=returnArray[0][1],qbXMLCountry="",qbXMLMajorVers=8,qbXMLMinorVers=0)
@@ -136,3 +141,5 @@ def make_fake_invoice(requestID=1,iteratorID="",iteratorRemainingCount="",iterat
     return requestxml
 
             
+if __name__ == '__main__':
+    runSimulator()
