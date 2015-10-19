@@ -239,18 +239,22 @@ class qbwcSessionManager():
             wwh.clear()
             return True
         else:
-            return False
+            return True # change back wab
                                      
     def get_reqXML(self,ticket):
         if self.currentWork['reqXML']:
             return  self.currentWork['reqXML']
         else:
-            reqID = self.blpop('qwc:waitingWork',timeout=50)
-            if reqID:
+            logging.warning("about to block")
+            litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=200)
+            logging.warning("finished blocking")
+            if litem:
+                reqID = litem[1]
                 wwh = self.redisdb.Hash(reqID)
                 reqXML = wwh['reqXML']
                 self.currentWork['reqXML'] = reqXML
                 self.currentWork['reqID'] = reqID
+                logging.warning("got a request via blocking %s",reqID)
                 wwh.clear()
                 return reqXML
             else:

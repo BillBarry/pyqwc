@@ -26,10 +26,10 @@ class pyqwcClient():
     def processResponse(self,processdata,optparam=""):
         TheEnd = False
         while not TheEnd:
-            data = blpop(self.responselist,timeout=120)
+            (rkey,data) = self.redisdb.blpop([self.responsekey],timeout=120)
             if data == "TheEnd":
                 TheEnd = True
-                print querytype,"TheEnd"
+                print optparam, "TheEnd"
                 self.responselist.clear()
             else:
                 if optparam:
