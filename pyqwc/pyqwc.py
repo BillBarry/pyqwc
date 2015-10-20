@@ -1,20 +1,17 @@
+import os
 import uuid
-import walrus
-from spyne.application import Application
-from spyne.service import ServiceBase
-from spyne.model.primitive import Integer, Unicode
-from spyne.model.complex import Iterable, ComplexModel, Array
-from spyne.decorator import srpc
-from spyne.protocol.soap import Soap11
-import time
+import logging
 from lxml import etree
 from configobj import ConfigObj
+from spyne.decorator import srpc
+from spyne.service import ServiceBase
+from spyne.protocol.soap import Soap11
+from spyne.application import Application
 from spyne.server.wsgi import WsgiApplication
+from spyne.model.primitive import Integer, Unicode
+from spyne.model.complex import Iterable, ComplexModel, Array
 from waitress import serve
-import os
-import logging
-import redis
-
+import walrus
 
 configfile = os.environ['QWC_CONFIG_FILE']
 config = ConfigObj(configfile)
@@ -27,9 +24,7 @@ LEVELS = {'DEBUG2': DEBUG2,
           'ERROR':logging.ERROR,
           'CRITICAL':logging.CRITICAL,
           }
-
 logging.addLevelName(DEBUG2,"DEBUG2")
-
 logging.basicConfig(level=LEVELS[config['qwc']['loglevel'].upper()])
 
 
@@ -38,11 +33,12 @@ rdb = walrus.Database(
     port=config['redis']['port'], 
     password=config['redis']['password'],
     db=config['redis']['db'])
-#? need to clear the hashes pointed to by waiting work first
-rdb.Hash('qwc:currentWork').clear()
-rdb.List('qwc:waitingWork').clear()
-rdb.set('qwc:sessionTicket','')
+#clear any qwc keys accidentally leftover in redis
+keystodelete = rdb.keys(pattern='qwc:*')
+for k in keystodelete:
+    rdb.delete(k)
 
+    
 class QBWCService(ServiceBase):
     @srpc(Unicode,Unicode,_returns=Array(Unicode))
     def authenticate(strUserName,strPassword):
@@ -57,13 +53,10 @@ class QBWCService(ServiceBase):
                 returnArray.append("none")
                 returnArray.append("busy")
                 logging.debug('trying to authenticate during an open session')
-            elif session_manager.newJobs():
+            else:
                 sessionticket = session_manager.setTicket()
                 returnArray.append(sessionticket)
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
-            else:
-                returnArray.append("none") # don't return a ticket if there are no requests
-                returnArray.append("none") #returning "none" indicates there are no requests at the moment
         else:
             returnArray.append("none") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
@@ -191,7 +184,6 @@ class qbwcSessionManager():
         responsekey = 'qwc:response:'+reqID
         self.responseStore = self.redisdb.List(responsekey)
         self.responseStore.append(response)
-        #self.redisdb.publish(responsekey,"data")
         logging.debug("storing response %s",responsekey)
         #check if it is iterative
         root = etree.fromstring(str(response))
@@ -212,52 +204,31 @@ class qbwcSessionManager():
                 ntree = etree.ElementTree(reqroot)
                 nextreqXML = etree.tostring(ntree, xml_declaration=True, encoding='UTF-8')                
                 self.currentWork['reqXML'] = nextreqXML
-                return 50  # is there any reason to return an accurate number here? something less than 100 is all that is needed.
             else:
                 # clear the currentWork hash
                 self.currentWork.clear()
                 # create a finish response
                 self.responseStore.append("TheEnd")
-                #self.redisdb.publish(responsekey,"end")
-                if self.newJobs():
-                    return 50
-                else:
-                    return 100 #100 percent done
-        else:
-            self.redisdb.publish(responsekey,"end")
-            #self.responseStore.append("TheEnd")        
-            return 100 #100 percent done
+        return 50 #this causes it to return to sendrequestXML, block and wait for more job requests
 
-
-    def newJobs(self):
-        if len(self.waitingWork):
-            reqID = self.waitingWork.pop()
-            wwh = self.redisdb.Hash(reqID)
-            reqXML = wwh['reqXML']
-            self.currentWork['reqXML'] = reqXML
-            self.currentWork['reqID'] = reqID
-            wwh.clear()
-            return True
-        else:
-            return True # change back wab
-                                     
+            
     def get_reqXML(self,ticket):
         if self.currentWork['reqXML']:
             return  self.currentWork['reqXML']
         else:
-            logging.warning("about to block")
+            logging.debug("block waiting for work in qwc:waitingWork")
             litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=3600)
-            logging.warning("finished blocking")
             if litem:
                 reqID = litem[1]
                 wwh = self.redisdb.Hash(reqID)
                 reqXML = wwh['reqXML']
                 self.currentWork['reqXML'] = reqXML
                 self.currentWork['reqID'] = reqID
-                logging.warning("got a request via blocking %s",reqID)
+                logging.debug("got a request via blocking %s",reqID)
                 wwh.clear()
                 return reqXML
             else:
+                logging.debug("timed out blocking on qwc:waitingWork")
                 self.redisdb.set(self.sessionKey,"")                
                 return ""
 
