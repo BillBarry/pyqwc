@@ -33,15 +33,15 @@ logging.addLevelName(DEBUG2,"DEBUG2")
 logging.basicConfig(level=LEVELS[config['qwc']['loglevel'].upper()])
 
 
-#rdb = walrus.Database(
-#    host=config['redis']['host'],
-#    port=config['redis']['port'], 
-#    password=config['redis']['password'],
-#    db=config['redis']['db'])
+rdb = walrus.Database(
+    host=config['redis']['host'],
+    port=config['redis']['port'], 
+    password=config['redis']['password'],
+    db=config['redis']['db'])
 #? need to clear the hashes pointed to by waiting work first
-#rdb.Hash('qwc:currentWork').clear()
-#rdb.List('qwc:waitingWork').clear()
-#rdb.set('qwc:sessionTicket','')
+rdb.Hash('qwc:currentWork').clear()
+rdb.List('qwc:waitingWork').clear()
+rdb.set('qwc:sessionTicket','')
 
 class QBWCService(ServiceBase):
     @srpc(Unicode,Unicode,_returns=Array(Unicode))
@@ -246,7 +246,7 @@ class qbwcSessionManager():
             return  self.currentWork['reqXML']
         else:
             logging.warning("about to block")
-            litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=200)
+            litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=3600)
             logging.warning("finished blocking")
             if litem:
                 reqID = litem[1]
@@ -258,6 +258,7 @@ class qbwcSessionManager():
                 wwh.clear()
                 return reqXML
             else:
+                self.redisdb.set(self.sessionKey,"")                
                 return ""
 
                     
