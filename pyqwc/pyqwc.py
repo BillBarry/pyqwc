@@ -12,6 +12,7 @@ from spyne.model.primitive import Integer, Unicode
 from spyne.model.complex import Iterable, ComplexModel, Array
 from waitress import serve
 import walrus
+import time
 
 configfile = os.environ['QWC_CONFIG_FILE']
 config = ConfigObj(configfile)
@@ -28,15 +29,15 @@ logging.addLevelName(DEBUG2,"DEBUG2")
 logging.basicConfig(level=LEVELS[config['qwc']['loglevel'].upper()])
 
 
-rdb = walrus.Database(
-    host=config['redis']['host'],
-    port=config['redis']['port'], 
-    password=config['redis']['password'],
-    db=config['redis']['db'])
+#rdb = walrus.Database(
+#    host=config['redis']['host'],
+#    port=config['redis']['port'], 
+#    password=config['redis']['password'],
+#    db=config['redis']['db'])
 #clear any qwc keys accidentally leftover in redis
-keystodelete = rdb.keys(pattern='qwc:*')
-for k in keystodelete:
-    rdb.delete(k)
+#keystodelete = rdb.keys(pattern='qwc:*')
+#for k in keystodelete:
+#    rdb.delete(k)
 
     
 class QBWCService(ServiceBase):
@@ -52,15 +53,16 @@ class QBWCService(ServiceBase):
             if session_manager.inSession():
                 returnArray.append("none")
                 returnArray.append("busy")
-                logging.debug('trying to authenticate during an open session')
+                logging.warning('trying to authenticate during an open session')
             else:
                 sessionticket = session_manager.setTicket()
                 returnArray.append(sessionticket)
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
+                logging.warning('creating a new sessionTicket')
         else:
             returnArray.append("none") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
-        logging.debug('authenticate %s',returnArray)
+        logging.warning('authenticate %s',returnArray)
         return returnArray
 
     @srpc(Unicode,  _returns=Unicode)
@@ -78,7 +80,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        session_manager.closeSession()
+        #session_manager.closeSession()
         logging.debug('closeConnection %s',ticket)
         return "OK"
 
@@ -118,8 +120,9 @@ class QBWCService(ServiceBase):
         @param qbXMLMinorVers Minor version number of the request processor qbXML 
         @return string containing the request if there is one or a NoOp
         """
+        logging.warning('sendRequestXML %s %s',time.ctime(),ticket)
+        logging.warning('redis ticket %s',session_manager.inSession())
         reqXML = session_manager.get_reqXML(ticket)
-        logging.debug('sendRequestXML')
         logging.log(DEBUG2,'sendRequestXML reqXML %s ',reqXML)
         logging.log(DEBUG2,'sendRequestXML strHCPResponse %s ',strHCPResponse)
         return reqXML
@@ -162,12 +165,10 @@ class qbwcSessionManager():
         self.redisdb.set(self.sessionKey,sessionTicket)
         return sessionTicket
     
-    def getTicket(self):
-        return self.redisdb.get(self.sessionKey)
-                         
     def inSession(self):
-        return self.getTicket()
-
+        print self.redisdb.get(self.sessionKey)
+        return self.redisdb.get(self.sessionKey)
+    
     def closeSession(self):
         self.clearTicket()
     
@@ -216,20 +217,20 @@ class qbwcSessionManager():
         if self.currentWork['reqXML']:
             return  self.currentWork['reqXML']
         else:
-            logging.debug("block waiting for work in qwc:waitingWork")
-            litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=3600)
+            logging.warning("block waiting for work in qwc:waitingWork")
+            litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=50)
             if litem:
                 reqID = litem[1]
                 wwh = self.redisdb.Hash(reqID)
                 reqXML = wwh['reqXML']
                 self.currentWork['reqXML'] = reqXML
                 self.currentWork['reqID'] = reqID
-                logging.debug("got a request via blocking %s",reqID)
+                logging.warning("got a request via blocking %s",reqID)
                 wwh.clear()
                 return reqXML
             else:
-                logging.debug("timed out blocking on qwc:waitingWork")
-                self.redisdb.set(self.sessionKey,"")                
+                logging.warning("timed out blocking on qwc:waitingWork")
+                #self.clearTicket()
                 return ""
 
                     
