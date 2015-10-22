@@ -166,7 +166,6 @@ class qbwcSessionManager():
         return sessionTicket
     
     def inSession(self):
-        print self.redisdb.get(self.sessionKey)
         return self.redisdb.get(self.sessionKey)
     
     def closeSession(self):
@@ -218,7 +217,7 @@ class qbwcSessionManager():
             return  self.currentWork['reqXML']
         else:
             logging.warning("block waiting for work in qwc:waitingWork")
-            litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=50)
+            litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=110)
             if litem:
                 reqID = litem[1]
                 wwh = self.redisdb.Hash(reqID)

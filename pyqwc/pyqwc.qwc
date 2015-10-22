@@ -10,6 +10,6 @@
     <FileID>}495b6884-e33f-4dba-9ecc-a3bbad96a971}</FileID>
     <QBType>QBFS</QBType>
     <Scheduler>
-        <RunEveryNMinutes>1</RunEveryNMinutes>
+        <RunEveryNMinutes>5</RunEveryNMinutes>
     </Scheduler>
 </QBWCXML>
