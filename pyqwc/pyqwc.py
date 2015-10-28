@@ -58,11 +58,11 @@ class QBWCService(ServiceBase):
                 sessionticket = session_manager.setTicket()
                 returnArray.append(sessionticket)
                 returnArray.append(config['qwc']['qbwfilename']) # returning the filename indicates there is a request in the queue
-                logging.warning('creating a new sessionTicket')
+                logging.debug('creating a new sessionTicket')
         else:
             returnArray.append("none") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
-        logging.warning('authenticate %s',returnArray)
+        logging.debug('authenticate %s',returnArray)
         return returnArray
 
     @srpc(Unicode,  _returns=Unicode)
@@ -120,8 +120,8 @@ class QBWCService(ServiceBase):
         @param qbXMLMinorVers Minor version number of the request processor qbXML 
         @return string containing the request if there is one or a NoOp
         """
-        logging.warning('sendRequestXML %s %s',time.ctime(),ticket)
-        logging.warning('redis ticket %s',session_manager.inSession())
+        logging.debug('sendRequestXML %s %s',time.ctime(),ticket)
+        logging.debug('redis ticket %s',session_manager.inSession())
         reqXML = session_manager.get_reqXML(ticket)
         logging.log(DEBUG2,'sendRequestXML reqXML %s ',reqXML)
         logging.log(DEBUG2,'sendRequestXML strHCPResponse %s ',strHCPResponse)
@@ -216,7 +216,7 @@ class qbwcSessionManager():
         if self.currentWork['reqXML']:
             return  self.currentWork['reqXML']
         else:
-            logging.warning("block waiting for work in qwc:waitingWork")
+            logging.debug("block waiting for work in qwc:waitingWork")
             litem  = self.redisdb.blpop(['qwc:waitingWork'],timeout=50)
             if litem:
                 reqID = litem[1]
@@ -224,11 +224,11 @@ class qbwcSessionManager():
                 reqXML = wwh['reqXML']
                 self.currentWork['reqXML'] = reqXML
                 self.currentWork['reqID'] = reqID
-                logging.warning("got a request via blocking %s",reqID)
+                logging.debug("got a request via blocking %s",reqID)
                 wwh.clear()
                 return reqXML
             else:
-                logging.warning("timed out blocking on qwc:waitingWork")
+                logging.debug("timed out blocking on qwc:waitingWork")
                 #self.clearTicket()
                 return ""
 
