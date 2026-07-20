@@ -6,8 +6,8 @@
     <AppDescription>Python access to Quickbooks</AppDescription>
     <AppSupport>http://localhost:4244/</AppSupport>
     <UserName>qbwcuser</UserName>
-    <OwnerID>{6801a7d2-3fb4-4643-8ef0-5e702b99521e}</OwnerID>
-    <FileID>}495b6884-e33f-4dba-9ecc-a3bbad96a971}</FileID>
+    <OwnerID>{c5cdca4b-97a0-4afe-8d56-e8169cdd581b}</OwnerID>
+    <FileID>{4bf38750-d977-43af-b233-c4fa7b1496e4}</FileID>
     <QBType>QBFS</QBType>
     <Scheduler>
         <RunEveryNMinutes>1</RunEveryNMinutes>

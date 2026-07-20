@@ -15,22 +15,11 @@ import os
 import logging
 import redis
 
-
-configfile = os.environ['QWC_CONFIG_FILE']
+#configfile = os.environ['QWC_CONFIG_FILE']
+configfile = "c:\qbwc\pyqwc\config.ini"
 config = ConfigObj(configfile)
 
-DEBUG2 = 8
-LEVELS = {'DEBUG2': DEBUG2,
-          'DEBUG':logging.DEBUG,
-          'INFO':logging.INFO,
-          'WARNING':logging.WARNING,
-          'ERROR':logging.ERROR,
-          'CRITICAL':logging.CRITICAL,
-          }
-
-logging.addLevelName(DEBUG2,"DEBUG2")
-
-logging.basicConfig(level=LEVELS[config['qwc']['loglevel'].upper()])
+logging.basicConfig(filename="c:\qbwc\pyqwc\service.log",level=config['qwc']['loglevel'].upper())
 
 
 #rdb = walrus.Database(
@@ -56,7 +45,7 @@ class QBWCService(ServiceBase):
             if session_manager.inSession():
                 returnArray.append("none")
                 returnArray.append("busy")
-                logging.debug('trying to authenticate during an open session')
+                logging.info('trying to authenticate during an open session')
             elif session_manager.newJobs():
                 sessionticket = session_manager.setTicket()
                 returnArray.append(sessionticket)
@@ -67,7 +56,7 @@ class QBWCService(ServiceBase):
         else:
             returnArray.append("none") # don't return a ticket if username password does not authenticate
             returnArray.append('nvu')
-        logging.debug('authenticate %s',returnArray)
+        logging.info('authenticate %s',returnArray)
         return returnArray
 
     @srpc(Unicode,  _returns=Unicode)
@@ -76,7 +65,7 @@ class QBWCService(ServiceBase):
         @param strVersion version of GB web connector
         @return what to do in case of Web connector updates itself
         """
-        logging.debug('clientVersion %s',strVersion)
+        logging.info('clientVersion %s',strVersion)
         return ""
 
     @srpc(Unicode,  _returns=Unicode)
@@ -86,8 +75,8 @@ class QBWCService(ServiceBase):
         @return string displayed to user indicating status of web service
         """
         session_manager.closeSession()
-        logging.debug('closeConnection %s',ticket)
-        return "OK"
+        logging.info('closeConnection %s',ticket)
+        return "Connection from Havercamp QWC Closed"
 
     @srpc(Unicode,Unicode,Unicode,  _returns=Unicode)
     def connectionError( ticket, hresult, message ):
@@ -98,7 +87,7 @@ class QBWCService(ServiceBase):
         @return string done indicating web service is finished.
         """
         # need to push this error to the client. Should there be a message channel on Redis for this?
-        logging.debug('connectionError %s %s %s', ticket, hresult, message)
+        logging.info('connectionError %s %s %s', ticket, hresult, message)
         return "done"
 
     @srpc(Unicode,  _returns=Unicode)
@@ -107,7 +96,7 @@ class QBWCService(ServiceBase):
         @param ticket session token sent from this service to web connector
         @return string displayed to user indicating status of web service
         """
-        logging.debug('lasterror %s',ticket)
+        logging.info('lasterror %s',ticket)
         #return "Error message here!"
         return "NoOp"
 
@@ -126,9 +115,9 @@ class QBWCService(ServiceBase):
         @return string containing the request if there is one or a NoOp
         """
         reqXML = session_manager.get_reqXML(ticket)
-        logging.debug('sendRequestXML')
-        logging.log(DEBUG2,'sendRequestXML reqXML %s ',reqXML)
-        logging.log(DEBUG2,'sendRequestXML strHCPResponse %s ',strHCPResponse)
+        logging.info('sendRequestXML')
+        logging.debug('sendRequestXML reqXML %s ',reqXML)
+        logging.debug('sendRequestXML strHCPResponse %s ',strHCPResponse)
         return reqXML
 
     @srpc(Unicode,Unicode,Unicode,Unicode,  _returns=Integer)
@@ -141,8 +130,8 @@ class QBWCService(ServiceBase):
         @return string integer returned 100 means done anything less means there is more to come.
               where can we best get that information?
         """
-        logging.debug('receiveResponseXML %s %s %s',ticket,hresult,message)
-        logging.log(DEBUG2,'receiveResponseXML %s',response)
+        logging.info('receiveResponseXML %s %s %s',ticket,hresult,message)
+        logging.debug('receiveResponseXML %s',response)
         percent_done = session_manager.process_response(ticket,response)
         return percent_done
 
@@ -192,13 +181,18 @@ class qbwcSessionManager():
         self.responseStore = self.redisdb.List(responsekey)
         self.responseStore.append(response)
         self.redisdb.publish(responsekey,"data")
-        logging.debug("storing response %s",responsekey)
+        logging.info("storing response %s",responsekey)
         #check if it is iterative
-        root = etree.fromstring(str(response))
+        response_enc = response.encode('utf-8')
+        parser = etree.XMLParser(ns_clean=True, recover=True, encoding = 'utf-8')
+        root= etree.fromstring(response_enc,parser=parser)
+#        root = etree.fromstring(str(response))
         isIterator = root.xpath('boolean(//@iteratorID)')
         if isIterator:
-            reqXML = self.currentWork['reqXML']
-            reqroot = etree.fromstring(str(reqXML))
+            reqXML = self.currentWork['reqXML'].encode('utf-8')
+            reqroot= etree.fromstring(reqXML, parser=parser)
+
+            #reqroot = etree.fromstring(str(reqXML))
             iteratorRemainingCount = int(root.xpath('string(//@iteratorRemainingCount)'))
             iteratorID = root.xpath('string(//@iteratorID)')
             logging.info("iteratorRemainingCount %s",iteratorRemainingCount)
@@ -220,7 +214,7 @@ class qbwcSessionManager():
                 self.redisdb.publish(responsekey,"end")
                 #self.responseStore.append("TheEnd")
                 if self.newJobs():
-                    return 50
+                    return 50  #anything from 0 to 99 means not finished
                 else:
                     return 100 #100 percent done
         else:
@@ -256,11 +250,10 @@ app = Application([QBWCService],
 session_manager = qbwcSessionManager()
 application  = WsgiApplication(app)
 
-    
+
 def start_server():
+    logging.info('pyqwc starting server')
     serve(application, host=config['qwc']['host'], port=int(config['qwc']['port']))
 
 if __name__ == '__main__':
     start_server()
-
-

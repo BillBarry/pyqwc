@@ -13,8 +13,11 @@ class pyqwcClient():
             port=config['redis']['port'], 
             password=config['redis']['password'],
             db=config['redis']['db'])
-
+        self.redisdb.flushdb()
+        
     def sendxml(self,reqXML):
+        #this puts the request into redis for the other half of the service to read and respond    
+        self.redisdb.flushdb()
         waitingWork = self.redisdb.List('qwc:waitingWork')
         jobID =  "qwc:"+str(uuid.uuid1())
         self.responsekey = 'qwc:response:'+jobID
@@ -38,6 +41,11 @@ class pyqwcClient():
                     processdata(data,optparam)
                 else:
                     processdata(data)
+
+    def __enter__(self):
+        return self
     
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.redisdb.flushdb()
 
         

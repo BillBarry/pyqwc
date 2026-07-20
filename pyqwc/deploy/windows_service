@@ -1,14 +1,14 @@
 import win32serviceutil
 import win32service
 import win32event
-import pyQBWC
+import pyqwc
 
 
 
 
 class pyQBWC (win32serviceutil.ServiceFramework):
-    _svc_name_ = "pyQBWC"
-    _svc_display_name_ = "pyQBWC server"
+    _svc_name_ = "pyqwc"
+    _svc_display_name_ = "pywc server"
 
     def __init__(self,args):
         win32serviceutil.ServiceFramework.__init__(self, *args)
@@ -19,10 +19,10 @@ class pyQBWC (win32serviceutil.ServiceFramework):
         win32event.SetEvent(self.stop_event)
 	
     def SvcDoRun(self):
-    	pyQBWC.start_server()
+    	pyqwc.start_server()
         win32event.WaitForSingleObject(self.stop_event, win32event.INFINITE)
         
 
 if __name__ == '__main__':
-    win32serviceutil.HandleCommandLine(pyQBWC)
+    win32serviceutil.HandleCommandLine(pyqwc)
    
